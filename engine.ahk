@@ -52,15 +52,18 @@ if !FileExist(keysPath) {
     ExitApp
 }
 
+keysText := FileRead(keysPath, "UTF-8")
 try {
-    hotkeys := ParseKeysJson(FileRead(keysPath, "UTF-8"))
+    hotkeys := ParseBindArray(keysText, "hotkeys")
+    hotstrings := ParseBindArray(keysText, "hotstrings")
 } catch as err {
     MsgBox "Could not parse keys.json:`n" keysPath "`n" err.Message, "KeyToMax"
     ExitApp
 }
 
-if Type(hotkeys) != "Array" || hotkeys.Length = 0 {
-    MsgBox "keys.json has no hotkeys array.`n" keysPath, "KeyToMax"
+if (Type(hotkeys) != "Array" || hotkeys.Length = 0)
+    && (Type(hotstrings) != "Array" || hotstrings.Length = 0) {
+    MsgBox "keys.json needs a non-empty hotkeys or hotstrings array.`n" keysPath, "KeyToMax"
     ExitApp
 }
 
@@ -83,10 +86,22 @@ for entry in hotkeys {
         RegisterHot(keyName, bindName)
     }
 }
+for entry in hotstrings {
+    if Type(entry) != "Map" || !entry.Has("key") || !entry.Has("bind") {
+        continue
+    }
+    trigger := String(entry["key"])
+    bindName := String(entry["bind"])
+    if entry.Has("value") {
+        RegisterHotstring(trigger, bindName, entry["value"])
+    } else {
+        RegisterHotstring(trigger, bindName)
+    }
+}
 HotIf
 
 if bad.Length {
-    MsgBox "Skipped invalid hotkeys:`n" JoinLines(bad), "KeyToMax"
+    MsgBox "Skipped invalid binds:`n" JoinLines(bad), "KeyToMax"
 }
 
 SetTimer WatchCmd, 150
@@ -135,6 +150,20 @@ RegisterHot(keyName, bindName, value?) {
         Hotkey(keyName, fn)
     } catch as err {
         bad.Push(keyName " (" err.Message ")")
+    }
+}
+
+RegisterHotstring(trigger, bindName, value?) {
+    global bad
+    fn := IsSet(value)
+        ? (*) => SendBind(bindName, value)
+        : (*) => SendBind(bindName)
+    try {
+        ; * = fire without an extra end key; B0 = do not send Backspace
+        ; (Live's piano roll treats Backspace as delete selected notes)
+        Hotstring(":*B0?:" trigger, fn)
+    } catch as err {
+        bad.Push(trigger " (" err.Message ")")
     }
 }
 
@@ -215,7 +244,8 @@ SendOsc(address, strArg, intArg?) {
     NumPut("UShort", 2, sockaddr, 0)
     NumPut("UShort", DllCall("ws2_32\htons", "UShort", PORT, "UShort"), sockaddr, 2)
     NumPut("UInt", DllCall("ws2_32\inet_addr", "AStr", HOST, "UInt"), sockaddr, 4)
-    DllCall("ws2_32\sendto", "Ptr", sock, "Ptr", packet, "Int", packet.Size, "Int", 0, "Ptr", sockaddr, "Int", 16, "Int")
+    DllCall("ws2_32\sendto", "Ptr", sock, "Ptr", packet, "Int", packet.Size, "Int", 0, "Ptr", sockaddr, "Int", 16,
+        "Int")
 }
 
 JoinLines(arr) {
@@ -226,10 +256,14 @@ JoinLines(arr) {
     return RTrim(out, "`n")
 }
 
-ParseKeysJson(text) {
-    hotkeys := []
+ParseBindArray(text, arrayName) {
+    entries := []
+    if !RegExMatch(text, 's)"' arrayName '"\s*:\s*\[(.*?)\]', &arr) {
+        return entries
+    }
+    section := arr[1]
     pos := 1
-    while pos := RegExMatch(text, "s)\{([^{}]+)\}", &m, pos) {
+    while pos := RegExMatch(section, "s)\{([^{}]+)\}", &m, pos) {
         block := m[1]
         if !RegExMatch(block, '"key"\s*:\s*"([^"]+)"', &k) {
             pos := m.Pos + 1
@@ -243,8 +277,8 @@ ParseKeysJson(text) {
         if RegExMatch(block, '"value"\s*:\s*(-?\d+)', &v) {
             entry["value"] := v[1] + 0
         }
-        hotkeys.Push(entry)
+        entries.Push(entry)
         pos := m.Pos + m.Len
     }
-    return hotkeys
+    return entries
 }
