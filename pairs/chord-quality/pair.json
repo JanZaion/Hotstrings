@@ -1,0 +1,6 @@
+{
+  "id": "chord-quality",
+  "name": "Chord quality",
+  "description": "Type major or minor in the piano roll to chordify selected notes",
+  "binds": ["major", "minor"]
+}
