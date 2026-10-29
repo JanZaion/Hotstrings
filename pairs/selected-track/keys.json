@@ -1,0 +1,7 @@
+{
+  "hotkeys": [
+    { "key": "m", "bind": "mute" },
+    { "key": "s", "bind": "solo" },
+    { "key": "a", "bind": "arm" }
+  ]
+}

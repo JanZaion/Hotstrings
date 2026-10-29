@@ -1,0 +1,7 @@
+# Runtime IPC between Max host and engine.ahk
+engine-cmd.txt
+current-pair.txt
+
+# OS
+.DS_Store
+Thumbs.db
