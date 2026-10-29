@@ -6,3 +6,4 @@
 4. create agents.md and claude.md for the user, make sure to include the NEW objects instruction
 5. concider making "vanilla" uneditable version
 6. add mac support
+7. check proper load order when mounting the patch
