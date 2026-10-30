@@ -12,6 +12,10 @@
 
 HOST := "127.0.0.1"
 PORT := 7400
+HS_IDLE_MS := 1000
+
+hsBinds := Map()
+hsBuffer := ""
 
 presetDir := ""
 doQuit := false
@@ -98,6 +102,13 @@ for entry in hotstrings {
         RegisterHotstring(trigger, bindName)
     }
 }
+if hsBinds.Count {
+    try {
+        Hotkey(";", BeginHotstring)
+    } catch as err {
+        bad.Push("; (" err.Message ")")
+    }
+}
 HotIf
 
 if bad.Length {
@@ -154,17 +165,84 @@ RegisterHot(keyName, bindName, value?) {
 }
 
 RegisterHotstring(trigger, bindName, value?) {
-    global bad
-    fn := IsSet(value)
-        ? (*) => SendBind(bindName, value)
-        : (*) => SendBind(bindName)
-    try {
-        ; * = fire without an extra end key; B0 = do not send Backspace
-        ; (Live's piano roll treats Backspace as delete selected notes)
-        Hotstring(":*B0?:" trigger, fn)
-    } catch as err {
-        bad.Push(trigger " (" err.Message ")")
+    global hsBinds
+    t := StrLower(String(trigger))
+    if t = "" {
+        return
     }
+    entry := Map("bind", String(bindName))
+    if IsSet(value) {
+        entry["value"] := value
+    }
+    hsBinds[t] := entry
+}
+
+BeginHotstring(*) {
+    global hsHook, hsBuffer
+    ; Keys after ; are swallowed until match, dead prefix, Esc, or idle timeout
+    StopHotstring()
+    hsBuffer := ""
+    hsHook := InputHook("L64", "{Esc}")
+    hsHook.KeyOpt("{All}", "S")
+    hsHook.OnChar := HsOnChar
+    hsHook.OnEnd := HsOnEnd
+    hsHook.Start()
+    SetTimer HsIdle, -HS_IDLE_MS
+}
+
+StopHotstring() {
+    global hsHook
+    SetTimer HsIdle, 0
+    if IsSet(hsHook) && hsHook.InProgress {
+        hsHook.Stop()
+    }
+}
+
+HsIdle(*) {
+    StopHotstring()
+}
+
+HsOnEnd(*) {
+    SetTimer HsIdle, 0
+}
+
+HsOnChar(ih, char) {
+    global hsBuffer, hsBinds
+    if !LiveFocused() {
+        StopHotstring()
+        return
+    }
+    if char = ";" {
+        hsBuffer := ""
+        SetTimer HsIdle, -HS_IDLE_MS
+        return
+    }
+    hsBuffer .= StrLower(char)
+    SetTimer HsIdle, -HS_IDLE_MS
+    if hsBinds.Has(hsBuffer) {
+        entry := hsBinds[hsBuffer]
+        StopHotstring()
+        if entry.Has("value") {
+            SendBind(entry["bind"], entry["value"])
+        } else {
+            SendBind(entry["bind"])
+        }
+        return
+    }
+    if !IsHsPrefix(hsBuffer) {
+        StopHotstring()
+    }
+}
+
+IsHsPrefix(buf) {
+    global hsBinds
+    n := StrLen(buf)
+    for trigger, _ in hsBinds {
+        if SubStr(trigger, 1, n) = buf {
+            return true
+        }
+    }
+    return false
 }
 
 SendBind(name, value?) {
@@ -188,6 +266,7 @@ InitUdp() {
 
 Cleanup(*) {
     global sock
+    StopHotstring()
     if sock && sock != -1 {
         DllCall("ws2_32\closesocket", "Ptr", sock)
         sock := 0
