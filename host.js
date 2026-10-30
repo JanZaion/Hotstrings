@@ -3,34 +3,34 @@ inlets = 1;
 outlets = 2;
 
 // [v8 host.js]
-// Outlet 0 -> pair [v8]: compile <live.js>
+// Outlet 0 -> preset [v8]: compile <live.js>
 // Outlet 1 -> [umenu]: clear / append <name>
 //
-// Keep host.js, engine.ahk, and pairs/ next to the .amxd.
-// loadbang in this file scans ./pairs (no hardcoded path in the patch).
-// Optional override: v8 host.js <pairs-folder>
+// Keep host.js, engine.ahk, and presets/ next to the .amxd.
+// loadbang in this file scans ./presets (no hardcoded path in the patch).
+// Optional override: v8 host.js <presets-folder>
 // [umenu] -> prepend load -> this v8
 // [live.toggle] -> prepend suspend -> this v8   (1 pause, 0 resume)
 // closebang -> quit
 
 let enginePath = "";
-let pairsDir = "";
-let pairs = [];
+let presetsDir = "";
+let presets = [];
 
 function loadbang() {
     scan();
 }
 
 function scan(path) {
-    const dir = path ? String(path) : defaultPairsDir();
+    const dir = path ? String(path) : defaultPresetsDir();
     if (!dir) {
-        post("host: cannot find the pairs folder. Put pairs/ next to the device.\n");
+        post("host: cannot find the presets folder. Put presets/ next to the device.\n");
         return;
     }
-    pairsDir = dir;
-    enginePath = joinPath(parentDir(pairsDir), "engine.ahk");
-    pairs = listPairFolders(pairsDir)
-        .map((name) => readPair(name))
+    presetsDir = dir;
+    enginePath = joinPath(parentDir(presetsDir), "engine.ahk");
+    presets = listPresetFolders(presetsDir)
+        .map((name) => readPreset(name))
         .filter(Boolean)
         .sort((a, b) => a.name.localeCompare(b.name));
     dumpMenu();
@@ -38,20 +38,20 @@ function scan(path) {
 
 function dumpMenu() {
     outlet(1, "clear");
-    for (const pair of pairs) {
-        outlet(1, "append", pair.name);
+    for (const preset of presets) {
+        outlet(1, "append", preset.name);
     }
 }
 
 function load(x) {
-    const pair = findPair(x);
-    if (!pair) {
-        post(`host: no pair ${x}\n`);
+    const preset = findPreset(x);
+    if (!preset) {
+        post(`host: no preset ${x}\n`);
         return;
     }
-    outlet(0, "compile", pair.js);
-    requestEngine(nativePath(pair.dir));
-    post(`host: compile ${pair.js}\n`);
+    outlet(0, "compile", preset.js);
+    requestEngine(nativePath(preset.dir));
+    post(`host: compile ${preset.js}\n`);
 }
 
 function msg_int(n) {
@@ -59,7 +59,7 @@ function msg_int(n) {
 }
 
 function bang() {
-    scan(pairsDir || defaultPairsDir());
+    scan(presetsDir || defaultPresetsDir());
 }
 
 function quit() {
@@ -88,12 +88,12 @@ function writeCommand(cmd) {
     writeText(joinPath(parentDir(enginePath), "engine-cmd.txt"), cmd);
 }
 
-function defaultPairsDir() {
+function defaultPresetsDir() {
     if (typeof jsarguments !== "undefined" && jsarguments.length > 1 && jsarguments[1]) {
         return String(jsarguments[1]);
     }
     const root = projectRoot();
-    return root ? joinPath(root, "pairs") : "";
+    return root ? joinPath(root, "presets") : "";
 }
 
 function projectRoot() {
@@ -128,18 +128,18 @@ function ensureEnginePath() {
     return false;
 }
 
-function findPair(x) {
+function findPreset(x) {
     if (typeof x === "number") {
-        return pairs[x];
+        return presets[x];
     }
     const s = String(x);
-    const byName = pairs.find((pair) => pair.id === s || pair.name === s);
+    const byName = presets.find((preset) => preset.id === s || preset.name === s);
     if (byName) {
         return byName;
     }
     const asNum = parseInt(s, 10);
     if (String(asNum) === s) {
-        return pairs[asNum];
+        return presets[asNum];
     }
     return null;
 }
@@ -148,14 +148,14 @@ function requestEngine(state) {
     if (!ensureEnginePath()) {
         return;
     }
-    const statePath = `${parentDir(enginePath)}/current-pair.txt`;
+    const statePath = `${parentDir(enginePath)}/current-preset.txt`;
     if (!writeText(statePath, state)) {
         return;
     }
     max.launchbrowser(fileUrl(enginePath));
 }
 
-function listPairFolders(dirPath) {
+function listPresetFolders(dirPath) {
     const names = [];
     const fold = new Folder(dirPath);
     fold.typelist = ["fold"];
@@ -171,9 +171,9 @@ function listPairFolders(dirPath) {
     return names;
 }
 
-function readPair(name) {
-    const dir = joinPath(pairsDir, name);
-    const raw = readText(joinPath(dir, "pair.json"));
+function readPreset(name) {
+    const dir = joinPath(presetsDir, name);
+    const raw = readText(joinPath(dir, "preset.json"));
     if (!raw) {
         return null;
     }

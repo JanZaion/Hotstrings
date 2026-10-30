@@ -1,6 +1,6 @@
 # Runtime IPC between Max host and engine.ahk
 engine-cmd.txt
-current-pair.txt
+current-preset.txt
 
 # OS
 .DS_Store

@@ -3,52 +3,52 @@
 #UseHook
 
 ; KeyToMax engine. Launch with:
-;   AutoHotkey64.exe engine.ahk --pair <pair-folder>
+;   AutoHotkey64.exe engine.ahk --preset <preset-folder>
 ;   AutoHotkey64.exe engine.ahk --quit
-;   or open this file after current-pair.txt is written (Max host does that)
+;   or open this file after current-preset.txt is written (Max host does that)
 ;
-; Reads keys.json in the pair folder and sends OSC /bind <name> [int]
+; Reads keys.json in the preset folder and sends OSC /bind <name> [int]
 ; to 127.0.0.1:7400 while Ableton Live is focused.
 
 HOST := "127.0.0.1"
 PORT := 7400
 
-pairDir := ""
+presetDir := ""
 doQuit := false
-pendingPair := false
+pendingPreset := false
 for arg in A_Args {
-    if pendingPair {
-        pairDir := arg
-        pendingPair := false
+    if pendingPreset {
+        presetDir := arg
+        pendingPreset := false
         continue
     }
     if arg = "--quit" {
         doQuit := true
-    } else if arg = "--pair" {
-        pendingPair := true
+    } else if arg = "--preset" {
+        pendingPreset := true
     }
 }
 
-if pairDir = "" {
-    statePath := A_ScriptDir "\current-pair.txt"
+if presetDir = "" {
+    statePath := A_ScriptDir "\current-preset.txt"
     if FileExist(statePath) {
-        pairDir := Trim(StrSplit(FileRead(statePath, "UTF-8"), "`n", "`r")[1])
+        presetDir := Trim(StrSplit(FileRead(statePath, "UTF-8"), "`n", "`r")[1])
     }
 }
 
-if doQuit || pairDir = "--quit" {
+if doQuit || presetDir = "--quit" {
     ExitApp
 }
 
-if pairDir = "" {
-    MsgBox "Launch with --pair <folder> (a pair directory that contains keys.json).", "KeyToMax"
+if presetDir = "" {
+    MsgBox "Launch with --preset <folder> (a preset directory that contains keys.json).", "KeyToMax"
     ExitApp
 }
 
-pairDir := RTrim(pairDir, "\/")
-keysPath := pairDir "\keys.json"
+presetDir := RTrim(presetDir, "\/")
+keysPath := presetDir "\keys.json"
 if !FileExist(keysPath) {
-    MsgBox "No keys.json in:`n" pairDir, "KeyToMax"
+    MsgBox "No keys.json in:`n" presetDir, "KeyToMax"
     ExitApp
 }
 
@@ -129,8 +129,8 @@ WatchCmd() {
 }
 
 UpdateTip() {
-    global pairDir
-    A_IconTip := (A_IsSuspended ? "KeyToMax paused  " : "KeyToMax  ") pairDir
+    global presetDir
+    A_IconTip := (A_IsSuspended ? "KeyToMax paused  " : "KeyToMax  ") presetDir
 }
 
 LiveFocused(*) {
