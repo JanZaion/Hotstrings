@@ -1,7 +1,0 @@
-{
-  "hotkeys": [],
-  "hotstrings": [
-    { "key": "major", "bind": "major" },
-    { "key": "minor", "bind": "minor" }
-  ]
-}

@@ -1,6 +1,0 @@
-{
-  "id": "scenes",
-  "name": "Scenes",
-  "description": "1-8 fire scenes in the session view",
-  "binds": ["scene"]
-}

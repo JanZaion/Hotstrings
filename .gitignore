@@ -1,10 +1,10 @@
 # Runtime IPC between Max host and engine.ahk
 engine-cmd.txt
 current-preset.txt
+bindings.json
 
 # Build
 node_modules/
-dist/
 
 # OS
 .DS_Store

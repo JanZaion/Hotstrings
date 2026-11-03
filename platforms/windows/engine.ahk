@@ -2,72 +2,65 @@
 #SingleInstance Force
 #UseHook
 
-; KeyToMax engine. Launch with:
-;   AutoHotkey64.exe engine.ahk --preset <preset-folder>
+; KeyToMax engine. Launch by opening this file after the Max host
+; writes bindings.json next to it, or:
 ;   AutoHotkey64.exe engine.ahk --quit
-;   or open this file after current-preset.txt is written (Max host does that)
 ;
-; Reads keys.json in the preset folder and sends OSC /bind <name> [int]
+; Reads bindings.json in this folder and sends OSC /bind <name> [int]
 ; to 127.0.0.1:7400 while Ableton Live is focused.
 
 HOST := "127.0.0.1"
 PORT := 7400
-HS_IDLE_MS := 1000
+HS_IDLE_MS := 2000
+CMD_PATH := A_ScriptDir "\engine-cmd.txt"
+KEYS_PATH := A_ScriptDir "\bindings.json"
+HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
 
 hsBinds := Map()
 hsBuffer := ""
+capturing := false
 
-presetDir := ""
 doQuit := false
-pendingPreset := false
 for arg in A_Args {
-    if pendingPreset {
-        presetDir := arg
-        pendingPreset := false
-        continue
-    }
     if arg = "--quit" {
         doQuit := true
-    } else if arg = "--preset" {
-        pendingPreset := true
     }
 }
 
-if presetDir = "" {
-    statePath := A_ScriptDir "\current-preset.txt"
-    if FileExist(statePath) {
-        presetDir := Trim(StrSplit(FileRead(statePath, "UTF-8"), "`n", "`r")[1])
+if FileExist(CMD_PATH) {
+    cmd := Trim(StrSplit(FileRead(CMD_PATH, "UTF-8"), "`n", "`r")[1])
+    try {
+        FileDelete(CMD_PATH)
+    }
+    if cmd = "quit" {
+        doQuit := true
     }
 }
 
-if doQuit || presetDir = "--quit" {
+if doQuit {
+    try {
+        FileDelete(KEYS_PATH)
+    }
     ExitApp
 }
 
-if presetDir = "" {
-    MsgBox "Launch with --preset <folder> (a preset directory that contains keys.json).", "KeyToMax"
+if !FileExist(KEYS_PATH) {
+    MsgBox "No bindings.json in:`n" A_ScriptDir, "KeyToMax"
     ExitApp
 }
 
-presetDir := RTrim(presetDir, "\/")
-keysPath := presetDir "\keys.json"
-if !FileExist(keysPath) {
-    MsgBox "No keys.json in:`n" presetDir, "KeyToMax"
-    ExitApp
-}
-
-keysText := FileRead(keysPath, "UTF-8")
+keysText := FileRead(KEYS_PATH, "UTF-8")
 try {
     hotkeys := ParseBindArray(keysText, "hotkeys")
     hotstrings := ParseBindArray(keysText, "hotstrings")
 } catch as err {
-    MsgBox "Could not parse keys.json:`n" keysPath "`n" err.Message, "KeyToMax"
+    MsgBox "Could not parse bindings.json:`n" KEYS_PATH "`n" err.Message, "KeyToMax"
     ExitApp
 }
 
 if (Type(hotkeys) != "Array" || hotkeys.Length = 0)
     && (Type(hotstrings) != "Array" || hotstrings.Length = 0) {
-    MsgBox "keys.json needs a non-empty hotkeys or hotstrings array.`n" keysPath, "KeyToMax"
+    MsgBox "bindings.json needs a non-empty hotkeys or hotstrings array.`n" KEYS_PATH, "KeyToMax"
     ExitApp
 }
 
@@ -77,19 +70,6 @@ OnExit(Cleanup)
 UpdateTip()
 
 bad := []
-HotIf LiveFocused
-for entry in hotkeys {
-    if Type(entry) != "Map" || !entry.Has("key") || !entry.Has("bind") {
-        continue
-    }
-    keyName := String(entry["key"])
-    bindName := String(entry["bind"])
-    if entry.Has("value") {
-        RegisterHot(keyName, bindName, entry["value"])
-    } else {
-        RegisterHot(keyName, bindName)
-    }
-}
 for entry in hotstrings {
     if Type(entry) != "Map" || !entry.Has("key") || !entry.Has("bind") {
         continue
@@ -102,11 +82,37 @@ for entry in hotstrings {
         RegisterHotstring(trigger, bindName)
     }
 }
+
+HotIf LiveIdle
+for entry in hotkeys {
+    if Type(entry) != "Map" || !entry.Has("key") || !entry.Has("bind") {
+        continue
+    }
+    keyName := String(entry["key"])
+    bindName := String(entry["bind"])
+    if entry.Has("value") {
+        RegisterHot(keyName, bindName, entry["value"])
+    } else {
+        RegisterHot(keyName, bindName)
+    }
+}
+HotIf LiveFocused
 if hsBinds.Count {
     try {
         Hotkey(";", BeginHotstring)
     } catch as err {
         bad.Push("; (" err.Message ")")
+    }
+}
+HotIf CapturingLive
+if hsBinds.Count {
+    Loop Parse HS_CHARS {
+        RegisterHsChar(A_LoopField)
+    }
+    try {
+        Hotkey("Escape", (*) => StopHotstring())
+    } catch as err {
+        bad.Push("Escape (" err.Message ")")
     }
 }
 HotIf
@@ -118,13 +124,13 @@ if bad.Length {
 SetTimer WatchCmd, 150
 
 WatchCmd() {
-    cmdPath := A_ScriptDir "\engine-cmd.txt"
-    if !FileExist(cmdPath) {
+    global CMD_PATH
+    if !FileExist(CMD_PATH) {
         return
     }
-    cmd := Trim(StrSplit(FileRead(cmdPath, "UTF-8"), "`n", "`r")[1])
+    cmd := Trim(StrSplit(FileRead(CMD_PATH, "UTF-8"), "`n", "`r")[1])
     try {
-        FileDelete(cmdPath)
+        FileDelete(CMD_PATH)
     }
     switch cmd {
         case "suspend":
@@ -134,14 +140,18 @@ WatchCmd() {
         case "toggle":
             Suspend
         case "quit":
+            try {
+                FileDelete(KEYS_PATH)
+            }
             ExitApp
+        case "":
+            return
     }
     UpdateTip()
 }
 
 UpdateTip() {
-    global presetDir
-    A_IconTip := (A_IsSuspended ? "KeyToMax paused  " : "KeyToMax  ") presetDir
+    A_IconTip := A_IsSuspended ? "KeyToMax paused" : "KeyToMax"
 }
 
 LiveFocused(*) {
@@ -150,6 +160,16 @@ LiveFocused(*) {
     } catch {
         return false
     }
+}
+
+LiveIdle(*) {
+    global capturing
+    return !capturing && LiveFocused()
+}
+
+CapturingLive(*) {
+    global capturing
+    return capturing && LiveFocused()
 }
 
 RegisterHot(keyName, bindName, value?) {
@@ -177,46 +197,35 @@ RegisterHotstring(trigger, bindName, value?) {
     hsBinds[t] := entry
 }
 
+RegisterHsChar(char) {
+    global bad
+    try {
+        Hotkey(char, HsOnChar)
+    } catch as err {
+        bad.Push(char " (" err.Message ")")
+    }
+}
+
 BeginHotstring(*) {
-    global hsHook, hsBuffer
-    ; Keys after ; are swallowed until match, dead prefix, Esc, or idle timeout
-    StopHotstring()
+    global capturing, hsBuffer
+    capturing := true
     hsBuffer := ""
-    hsHook := InputHook("L64", "{Esc}")
-    hsHook.KeyOpt("{All}", "S")
-    hsHook.OnChar := HsOnChar
-    hsHook.OnEnd := HsOnEnd
-    hsHook.Start()
     SetTimer HsIdle, -HS_IDLE_MS
 }
 
 StopHotstring() {
-    global hsHook
+    global capturing, hsBuffer
+    capturing := false
+    hsBuffer := ""
     SetTimer HsIdle, 0
-    if IsSet(hsHook) && hsHook.InProgress {
-        hsHook.Stop()
-    }
 }
 
 HsIdle(*) {
     StopHotstring()
 }
 
-HsOnEnd(*) {
-    SetTimer HsIdle, 0
-}
-
-HsOnChar(ih, char) {
+HsOnChar(char) {
     global hsBuffer, hsBinds
-    if !LiveFocused() {
-        StopHotstring()
-        return
-    }
-    if char = ";" {
-        hsBuffer := ""
-        SetTimer HsIdle, -HS_IDLE_MS
-        return
-    }
     hsBuffer .= StrLower(char)
     SetTimer HsIdle, -HS_IDLE_MS
     if hsBinds.Has(hsBuffer) {

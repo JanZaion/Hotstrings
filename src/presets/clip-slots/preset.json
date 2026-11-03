@@ -1,6 +1,0 @@
-{
-  "id": "clip-slots",
-  "name": "Clip slots",
-  "description": "1-8 fire clip slots on the selected track",
-  "binds": ["slot"]
-}

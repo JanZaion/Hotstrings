@@ -1,6 +1,0 @@
-{
-  "id": "selected-track",
-  "name": "Selected track",
-  "description": "m mute, s solo, a arm the selected track",
-  "binds": ["mute", "solo", "arm"]
-}

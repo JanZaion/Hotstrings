@@ -1,6 +1,0 @@
-{
-  "hotkeys": [
-    { "key": "p", "bind": "play" },
-    { "key": "o", "bind": "stop" }
-  ]
-}
