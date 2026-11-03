@@ -19,6 +19,15 @@ HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
 hsBinds := Map()
 hsBuffer := ""
 capturing := false
+hud := 0
+hudText := 0
+hudMinW := 0
+hudMinH := 0
+HUD_PAD_X := 8
+HUD_PAD_Y := 5
+HUD_ROUND := 10
+HUD_ALPHA := 200
+HUD_GROW := 0.65
 
 doQuit := false
 for arg in A_Args {
@@ -59,7 +68,7 @@ try {
 }
 
 if (Type(hotkeys) != "Array" || hotkeys.Length = 0)
-    && (Type(hotstrings) != "Array" || hotstrings.Length = 0) {
+&& (Type(hotstrings) != "Array" || hotstrings.Length = 0) {
     MsgBox "bindings.json needs a non-empty hotkeys or hotstrings array.`n" KEYS_PATH, "KeyToMax"
     ExitApp
 }
@@ -68,6 +77,12 @@ sock := 0
 InitUdp()
 OnExit(Cleanup)
 UpdateTip()
+try {
+    InitHud()
+} catch {
+    hud := 0
+    hudText := 0
+}
 
 bad := []
 for entry in hotstrings {
@@ -106,7 +121,7 @@ if hsBinds.Count {
 }
 HotIf CapturingLive
 if hsBinds.Count {
-    Loop Parse HS_CHARS {
+    loop parse HS_CHARS {
         RegisterHsChar(A_LoopField)
     }
     try {
@@ -124,7 +139,10 @@ if bad.Length {
 SetTimer WatchCmd, 150
 
 WatchCmd() {
-    global CMD_PATH
+    global CMD_PATH, capturing
+    if capturing && !LiveFocused() {
+        StopHotstring()
+    }
     if !FileExist(CMD_PATH) {
         return
     }
@@ -134,11 +152,15 @@ WatchCmd() {
     }
     switch cmd {
         case "suspend":
+            StopHotstring()
             Suspend True
         case "resume":
             Suspend False
         case "toggle":
             Suspend
+            if A_IsSuspended {
+                StopHotstring()
+            }
         case "quit":
             try {
                 FileDelete(KEYS_PATH)
@@ -210,11 +232,13 @@ BeginHotstring(*) {
     global capturing, hsBuffer
     capturing := true
     hsBuffer := ""
+    HudShow()
     SetTimer HsIdle, -HS_IDLE_MS
 }
 
 StopHotstring() {
     global capturing, hsBuffer
+    HudHide()
     capturing := false
     hsBuffer := ""
     SetTimer HsIdle, 0
@@ -240,7 +264,9 @@ HsOnChar(char) {
     }
     if !IsHsPrefix(hsBuffer) {
         StopHotstring()
+        return
     }
+    HudUpdate(hsBuffer)
 }
 
 IsHsPrefix(buf) {
@@ -259,6 +285,100 @@ SendBind(name, value?) {
         SendOsc("/bind", String(name), Integer(value))
     else
         SendOsc("/bind", String(name))
+}
+
+InitHud() {
+    global hud, hudText, hudMinW, hudMinH, HUD_PAD_X, HUD_PAD_Y, HUD_ALPHA
+    hud := Gui("+AlwaysOnTop -Caption -Theme +ToolWindow +E0x08000020")
+    hud.BackColor := "0C1217"
+    hud.MarginX := 0
+    hud.MarginY := 0
+    hud.SetFont("s18 cFF9000 Bold", "Segoe UI")
+    hudText := hud.Add("Text", "x0 y0 Center 0x200", "")
+    hud.Show("Hide")
+    WinSetTransparent(HUD_ALPHA, hud)
+    m := HudMeasure("www")
+    hudMinW := m[1] + HUD_PAD_X * 2
+    hudMinH := m[2] + HUD_PAD_Y * 2
+}
+
+HudShow() {
+    global hsBuffer
+    HudPaint(hsBuffer)
+}
+
+HudUpdate(text) {
+    HudPaint(text)
+}
+
+HudHide() {
+    global hud, hudText
+    if !hud {
+        return
+    }
+    hudText.Value := ""
+    hud.Hide()
+}
+
+HudPaint(text) {
+    global hud, hudText, hudMinW, hudMinH, HUD_PAD_X, HUD_GROW
+    if !hud {
+        return
+    }
+    hudText.Value := text
+    w := hudMinW
+    h := hudMinH
+    if StrLen(text) > 3 {
+        extra := HudMeasure(text)[1] + HUD_PAD_X * 2 - hudMinW
+        if extra > 0 {
+            w := hudMinW + Integer(extra * HUD_GROW)
+        }
+    }
+    hudText.Move(0, 0, w, h)
+    hud.Show(HudPos(w, h) " w" w " h" h " NoActivate")
+    HudRound()
+}
+
+HudMeasure(text) {
+    global hudText
+    hwnd := hudText.Hwnd
+    hdc := DllCall("GetDC", "Ptr", hwnd, "Ptr")
+    hFont := DllCall("SendMessageW", "Ptr", hwnd, "UInt", 0x31, "Ptr", 0, "Ptr", 0, "Ptr")
+    old := DllCall("SelectObject", "Ptr", hdc, "Ptr", hFont, "Ptr")
+    size := Buffer(8, 0)
+    DllCall("GetTextExtentPoint32W", "Ptr", hdc, "WStr", text, "Int", StrLen(text), "Ptr", size)
+    DllCall("SelectObject", "Ptr", hdc, "Ptr", old, "Ptr")
+    DllCall("ReleaseDC", "Ptr", hwnd, "Ptr", hdc)
+    return [NumGet(size, 0, "Int"), NumGet(size, 4, "Int")]
+}
+
+HudRound() {
+    global hud, HUD_ROUND
+    rect := Buffer(16, 0)
+    DllCall("GetClientRect", "Ptr", hud.Hwnd, "Ptr", rect)
+    w := NumGet(rect, 8, "Int")
+    h := NumGet(rect, 12, "Int")
+    r := HUD_ROUND
+    dpi := DllCall("User32\GetDpiForWindow", "Ptr", hud.Hwnd, "UInt")
+    if dpi && dpi != 96 {
+        r := Round(r * dpi / 96)
+    }
+    if r > h {
+        r := h
+    }
+    hrgn := DllCall("CreateRoundRectRgn", "Int", 0, "Int", 0, "Int", w + 1, "Int", h + 1, "Int", r, "Int", r, "Ptr")
+    DllCall("SetWindowRgn", "Ptr", hud.Hwnd, "Ptr", hrgn, "Int", true)
+}
+
+HudPos(w, h) {
+    try {
+        WinGetPos(&lx, &ly, &lw, &lh, "A")
+        x := lx + (lw - w) // 2
+        y := ly + (lh - h) // 2
+        return "x" x " y" y
+    } catch {
+        return "xCenter yCenter"
+    }
 }
 
 InitUdp() {

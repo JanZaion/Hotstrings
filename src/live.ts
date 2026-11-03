@@ -54,6 +54,7 @@ const BINDINGS: Bindings = {
   hotstrings: [
     { key: 'major', bind: 'major' },
     { key: 'minor', bind: 'minor' },
+    { key: 'moremoremore', bind: 'moremoremore' },
   ],
 };
 
@@ -168,7 +169,7 @@ function pushTone(notes: NoteSpec[], root: MidiNote, pitch: number, duration: nu
   notes.push(noteSpecFromRoot(root, pitch, duration));
 }
 
-function chordify(quality: 'major' | 'minor') {
+function chordify(quality: 'major' | 'minor', stacks = 1) {
   const clip = getDetailMidiClip();
   if (!clip) {
     return;
@@ -185,9 +186,12 @@ function chordify(quality: 'major' | 'minor') {
     if (root.note_id !== undefined) {
       ids.push(root.note_id);
     }
-    pushTone(triad, root, root.pitch, duration);
-    pushTone(triad, root, root.pitch + thirdOffset, duration);
-    pushTone(triad, root, root.pitch + 7, duration);
+    for (let oct = 0; oct < stacks; oct++) {
+      const base = root.pitch + oct * 12;
+      pushTone(triad, root, base, duration);
+      pushTone(triad, root, base + thirdOffset, duration);
+      pushTone(triad, root, base + 7, duration);
+    }
   }
   if (ids.length) {
     clip.call('remove_notes_by_id', ids);
@@ -203,9 +207,14 @@ function minor() {
   chordify('minor');
 }
 
+function moremoremore() {
+  chordify('major', 3);
+}
+
 void loadbang;
 void bang;
 void play;
 void stop;
 void major;
 void minor;
+void moremoremore;
