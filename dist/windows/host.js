@@ -45,6 +45,13 @@ function suspend(n) {
 function resume() {
   writeCommand("resume");
 }
+function hud(n) {
+  if (n === 1) {
+    writeCommand("hudoff");
+    return;
+  }
+  writeCommand("hudon");
+}
 function writeCommand(cmd) {
   if (!ensureEnginePath()) {
     return;
@@ -124,3 +131,4 @@ void notifydeleted;
 void quit;
 void suspend;
 void resume;
+void hud;

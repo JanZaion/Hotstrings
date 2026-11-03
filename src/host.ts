@@ -6,6 +6,7 @@ outlets = 0;
 // Keep host.js, live.js, and engine.ahk next to the .amxd.
 // [v8 live.js] outlet 0 -> prepend binds -> this v8
 // [live.toggle] -> prepend suspend -> this v8   (1 pause, 0 resume)
+// [live.toggle] -> prepend hud -> this v8       (1 on, 0 off)
 // closebang object -> quit  (also handled in this file as closebang())
 
 type HostJsThis = {
@@ -64,6 +65,14 @@ function suspend(n: number) {
 
 function resume() {
   writeCommand('resume');
+}
+
+function hud(n: number) {
+  if (n === 1) {
+    writeCommand('hudoff');
+    return;
+  }
+  writeCommand('hudon');
 }
 
 function writeCommand(cmd: string) {
@@ -153,3 +162,4 @@ void notifydeleted;
 void quit;
 void suspend;
 void resume;
+void hud;

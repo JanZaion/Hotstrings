@@ -19,6 +19,7 @@ HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
 hsBinds := Map()
 hsBuffer := ""
 capturing := false
+hudEnabled := true
 hud := 0
 hudText := 0
 hudMinW := 0
@@ -161,6 +162,10 @@ WatchCmd() {
             if A_IsSuspended {
                 StopHotstring()
             }
+        case "hudon":
+            SetHudEnabled(true)
+        case "hudoff":
+            SetHudEnabled(false)
         case "quit":
             try {
                 FileDelete(KEYS_PATH)
@@ -302,8 +307,23 @@ InitHud() {
     hudMinH := m[2] + HUD_PAD_Y * 2
 }
 
+SetHudEnabled(on) {
+    global hudEnabled, capturing
+    hudEnabled := on ? true : false
+    if !hudEnabled {
+        HudHide()
+        return
+    }
+    if capturing {
+        HudShow()
+    }
+}
+
 HudShow() {
-    global hsBuffer
+    global hsBuffer, hudEnabled
+    if !hudEnabled {
+        return
+    }
     HudPaint(hsBuffer)
 }
 
@@ -321,8 +341,8 @@ HudHide() {
 }
 
 HudPaint(text) {
-    global hud, hudText, hudMinW, hudMinH, HUD_PAD_X, HUD_GROW
-    if !hud {
+    global hud, hudText, hudMinW, hudMinH, HUD_PAD_X, HUD_GROW, hudEnabled
+    if !hud || !hudEnabled {
         return
     }
     hudText.Value := text
