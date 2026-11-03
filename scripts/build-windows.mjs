@@ -1,10 +1,12 @@
-import { cpSync, mkdirSync, rmSync, watch } from 'node:fs';
+import { createWriteStream, cpSync, mkdirSync, rmSync, watch } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ZipArchive } from 'archiver';
 import * as esbuild from 'esbuild';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist', 'windows');
+const zipPath = join(root, 'dist', 'Keyboard_Warrior_Windows.zip');
 const watchMode = process.argv.includes('--watch');
 
 const esbuildOptions = {
@@ -31,6 +33,21 @@ function prepareDist() {
   copyStatic();
 }
 
+function zipDist() {
+  rmSync(zipPath, { force: true });
+
+  const output = createWriteStream(zipPath);
+  const archive = new ZipArchive({ zlib: { level: 9 } });
+
+  return new Promise((resolve, reject) => {
+    output.on('close', resolve);
+    archive.on('error', reject);
+    archive.pipe(output);
+    archive.directory(dist, 'Keyboard_Warrior_Windows');
+    archive.finalize();
+  });
+}
+
 prepareDist();
 
 const ctx = await esbuild.context(esbuildOptions);
@@ -51,4 +68,5 @@ if (watchMode) {
 } else {
   await ctx.rebuild();
   await ctx.dispose();
+  await zipDist();
 }
