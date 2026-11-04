@@ -8,5 +8,8 @@ export const BINDINGS: Bindings = {
     { key: 'chord7', bind: 'chord7' },
     { key: 'chord9', bind: 'chord9' },
     ...Object.keys(FIXED_CHORDS).map(key => ({ key, bind: key })),
+    { key: 'lead', bind: 'lead' },
+    { key: 'up', bind: 'up' },
+    { key: 'down', bind: 'down' },
   ],
 };

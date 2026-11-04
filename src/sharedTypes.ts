@@ -16,6 +16,7 @@ export type MidiNote = {
   note_id?: number;
   pitch: number;
   start_time: number;
+  duration?: number;
   velocity?: number;
   mute?: number;
   probability?: number;

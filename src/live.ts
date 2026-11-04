@@ -10,6 +10,8 @@ import {
   dim,
   dim7,
   dim9,
+  down,
+  lead,
   major,
   major7,
   major9,
@@ -19,6 +21,7 @@ import {
   pow,
   sus2,
   sus4,
+  up,
 } from './chords';
 
 autowatch = 1;
@@ -58,3 +61,6 @@ void major9;
 void minor9;
 void dim9;
 void aug9;
+void lead;
+void up;
+void down;

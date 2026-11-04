@@ -150,7 +150,10 @@ var BINDINGS = {
     { key: "chord", bind: "chord" },
     { key: "chord7", bind: "chord7" },
     { key: "chord9", bind: "chord9" },
-    ...Object.keys(FIXED_CHORDS).map((key) => ({ key, bind: key }))
+    ...Object.keys(FIXED_CHORDS).map((key) => ({ key, bind: key })),
+    { key: "lead", bind: "lead" },
+    { key: "up", bind: "up" },
+    { key: "down", bind: "down" }
   ]
 };
 
@@ -218,10 +221,10 @@ function selectedNotes(clip) {
   const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
   return parsed && parsed.notes ? parsed.notes : [];
 }
-function noteSpecFromRoot(root, pitch, duration) {
+function noteSpecFromRoot(root, pitch, duration, startTime) {
   const spec = {
     pitch,
-    start_time: root.start_time,
+    start_time: startTime === void 0 ? root.start_time : startTime,
     duration
   };
   if (root.velocity !== void 0) {
@@ -241,11 +244,11 @@ function noteSpecFromRoot(root, pitch, duration) {
   }
   return spec;
 }
-function pushTone(notes, root, pitch, duration) {
+function pushTone(notes, root, pitch, duration, startTime) {
   if (pitch < 0 || pitch > 127) {
     return;
   }
-  notes.push(noteSpecFromRoot(root, pitch, duration));
+  notes.push(noteSpecFromRoot(root, pitch, duration, startTime));
 }
 function normalizeScaleName(name) {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
@@ -308,6 +311,114 @@ function clipScale(clip) {
     return scale;
   }
   return null;
+}
+function groupSelectedByStartTime(notes) {
+  const sorted = notes.slice().sort((a, b) => a.start_time - b.start_time || a.pitch - b.pitch);
+  const groups = [];
+  for (const note of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && last[0].start_time === note.start_time) {
+      last.push(note);
+    } else {
+      groups.push([note]);
+    }
+  }
+  return groups;
+}
+function selectedNoteIds(notes) {
+  const ids = [];
+  for (const note of notes) {
+    if (note.note_id !== void 0) {
+      ids.push(note.note_id);
+    }
+  }
+  return ids;
+}
+function replaceSelectedNotes(clip, selected, notes) {
+  const ids = selectedNoteIds(selected);
+  if (ids.length) {
+    clip.call("remove_notes_by_id", ids);
+  }
+  if (notes.length) {
+    clip.call("add_new_notes", { notes });
+  }
+}
+function nearestPitchInterval(pitch, otherPitches) {
+  let nearest = Infinity;
+  for (const other of otherPitches) {
+    const interval = Math.abs(pitch - other);
+    if (interval < nearest) {
+      nearest = interval;
+    }
+  }
+  return nearest;
+}
+function solarCandidatePitch(pitch, referencePitches) {
+  const stayInterval = nearestPitchInterval(pitch, referencePitches);
+  const upPitch = pitch + 12;
+  const upInterval = nearestPitchInterval(upPitch, referencePitches);
+  let chosenPitch = pitch;
+  let chosenInterval = stayInterval;
+  if (upInterval <= chosenInterval) {
+    chosenPitch = upPitch;
+    chosenInterval = upInterval;
+  }
+  const downPitch = pitch - 12;
+  const downInterval = nearestPitchInterval(downPitch, referencePitches);
+  if (downInterval < chosenInterval) {
+    chosenPitch = downPitch;
+  }
+  return chosenPitch;
+}
+function voiceLeadGroups(groups) {
+  const firstPitches = [];
+  for (const note of groups[0]) {
+    firstPitches.push(note.pitch);
+  }
+  const notes = [];
+  for (let index = 0; index < groups.length; index++) {
+    for (const note of groups[index]) {
+      const pitch = index === 0 ? note.pitch : solarCandidatePitch(note.pitch, firstPitches);
+      pushTone(notes, note, pitch, note.duration ?? 0);
+    }
+  }
+  return notes;
+}
+function groupSpanBeats(group) {
+  let span = 0;
+  for (const note of group) {
+    if (note.duration !== void 0 && note.duration > span) {
+      span = note.duration;
+    }
+  }
+  return span;
+}
+function arpeggiateGroups(groups, direction, stepBeats) {
+  const notes = [];
+  const step = stepBeats > 0 ? stepBeats : 1;
+  for (const group of groups) {
+    if (group.length === 0) {
+      continue;
+    }
+    const span = groupSpanBeats(group);
+    if (span <= 0) {
+      continue;
+    }
+    const ordered = direction === "down" ? group.slice().reverse() : group;
+    const columnCount = Math.max(1, Math.ceil(span / step));
+    let used = 0;
+    for (let col = 0; col < columnCount; col++) {
+      const remaining = span - used;
+      const duration = col === columnCount - 1 ? remaining : Math.min(step, remaining);
+      if (duration <= 0) {
+        break;
+      }
+      const tone = ordered[col % ordered.length];
+      pushTone(notes, tone, tone.pitch, duration, group[0].start_time + used);
+      used += duration;
+    }
+  }
+  return notes;
 }
 function rewriteSelected(pitchesFromRoot) {
   const clip = getDetailMidiClip();
@@ -401,6 +512,50 @@ function dim9() {
 function aug9() {
   fixedChord("aug9");
 }
+function lead() {
+  const clip = getDetailMidiClip();
+  if (!clip) {
+    return;
+  }
+  const selected = selectedNotes(clip);
+  if (selected.length === 0) {
+    return;
+  }
+  const groups = groupSelectedByStartTime(selected);
+  if (groups.length <= 1) {
+    return;
+  }
+  const notes = voiceLeadGroups(groups);
+  if (notes.length === 0) {
+    return;
+  }
+  replaceSelectedNotes(clip, selected, notes);
+}
+function arpeggiateSelected(direction) {
+  const clip = getDetailMidiClip();
+  if (!clip) {
+    return;
+  }
+  const selected = selectedNotes(clip);
+  if (selected.length === 0) {
+    return;
+  }
+  const notes = arpeggiateGroups(
+    groupSelectedByStartTime(selected),
+    direction,
+    gridStepBeats(clip)
+  );
+  if (notes.length === 0) {
+    return;
+  }
+  replaceSelectedNotes(clip, selected, notes);
+}
+function up() {
+  arpeggiateSelected("up");
+}
+function down() {
+  arpeggiateSelected("down");
+}
 
 // src/live.ts
 autowatch = 1;
@@ -436,3 +591,6 @@ void major9;
 void minor9;
 void dim9;
 void aug9;
+void lead;
+void up;
+void down;
