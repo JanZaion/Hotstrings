@@ -1,12 +1,12 @@
-import noMaxCtorInFunction from './rules/no-max-ctor-in-function.js';
+import noLiveApiCtorInFunction from './rules/no-liveapi-ctor-in-function.js';
 
 const plugin = {
   meta: {
-    name: 'eslint-plugin-max',
+    name: 'eslint-plugin-liveapi',
     version: '1.0.0',
   },
   rules: {
-    'no-max-ctor-in-function': noMaxCtorInFunction,
+    'no-ctor-in-function': noLiveApiCtorInFunction,
   },
 };
 
