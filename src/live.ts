@@ -1,3 +1,6 @@
+import { diatonicPitches, FIXED_CHORDS, scaleIntervalsForName } from './theory';
+import type { FixedQuality } from './theory';
+
 autowatch = 1;
 inlets = 1;
 outlets = 1;
@@ -44,6 +47,11 @@ type LiveClip = {
   call: (func: string, ...args: unknown[]) => unknown;
 };
 
+type ClipScale = {
+  tonicPc: number;
+  intervals: readonly number[];
+};
+
 const live = new LiveAPI() as unknown as LiveClip;
 const detailClip = new LiveAPI() as unknown as LiveClip;
 
@@ -55,11 +63,10 @@ function liveApi(path: string) {
 const BINDINGS: Bindings = {
   hotkeys: [{ key: '`', bind: 'cliploop', keys: '^j' }],
   hotstrings: [
-    { key: 'major', bind: 'major' },
-    { key: 'major7', bind: 'major7' },
-    { key: 'minor', bind: 'minor' },
-    { key: 'minor7', bind: 'minor7' },
-    { key: 'moremoremore', bind: 'moremoremore' },
+    { key: 'chord', bind: 'chord' },
+    { key: 'chord7', bind: 'chord7' },
+    { key: 'chord9', bind: 'chord9' },
+    ...Object.keys(FIXED_CHORDS).map(key => ({ key, bind: key })),
   ],
 };
 
@@ -74,13 +81,6 @@ const GRID_BEATS: Record<number, number> = {
   7: 0.5,
   8: 0.25,
   9: 0.125,
-};
-
-const CHORD_INTERVALS = {
-  major: [0, 4, 7],
-  minor: [0, 3, 7],
-  major7: [0, 4, 7, 11],
-  minor7: [0, 3, 7, 10],
 };
 
 function loadbang() {
@@ -116,6 +116,21 @@ function liveValue(raw: unknown) {
     return raw[0];
   }
   return raw;
+}
+
+function liveInts(raw: unknown) {
+  const items = raw instanceof Array ? raw : raw == null || raw === '' ? [] : [raw];
+  const out: number[] = [];
+  for (const item of items) {
+    if (typeof item === 'string' && item !== '' && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n)) {
+      out.push(n);
+    }
+  }
+  return out;
 }
 
 function getDetailMidiClip() {
@@ -189,7 +204,23 @@ function pushTone(notes: NoteSpec[], root: MidiNote, pitch: number, duration: nu
   notes.push(noteSpecFromRoot(root, pitch, duration));
 }
 
-function chordify(quality: keyof typeof CHORD_INTERVALS, stacks = 1) {
+function clipScale(clip: LiveClip) {
+  const tonic = Number(liveValue(clip.get('root_note')));
+  const tonicPc = Number.isFinite(tonic) ? ((tonic % 12) + 12) % 12 : 0;
+  const intervals = liveInts(clip.get('scale_intervals')).filter(n => n >= 0 && n < 12);
+  if (intervals.length >= 2) {
+    const scale: ClipScale = { tonicPc, intervals };
+    return scale;
+  }
+  const named = scaleIntervalsForName(String(liveValue(clip.get('scale_name')) ?? ''));
+  if (named && named.length >= 2) {
+    const scale: ClipScale = { tonicPc, intervals: named };
+    return scale;
+  }
+  return null;
+}
+
+function rewriteSelected(pitchesFromRoot: (root: MidiNote, clip: LiveClip) => number[]) {
   const clip = getDetailMidiClip();
   if (!clip) {
     return;
@@ -198,7 +229,6 @@ function chordify(quality: keyof typeof CHORD_INTERVALS, stacks = 1) {
   if (roots.length === 0) {
     return;
   }
-  const intervals = CHORD_INTERVALS[quality];
   const duration = gridStepBeats(clip);
   const ids: number[] = [];
   const notes: NoteSpec[] = [];
@@ -206,11 +236,8 @@ function chordify(quality: keyof typeof CHORD_INTERVALS, stacks = 1) {
     if (root.note_id !== undefined) {
       ids.push(root.note_id);
     }
-    for (let oct = 0; oct < stacks; oct++) {
-      const base = root.pitch + oct * 12;
-      for (const interval of intervals) {
-        pushTone(notes, root, base + interval, duration);
-      }
+    for (const pitch of pitchesFromRoot(root, clip)) {
+      pushTone(notes, root, pitch, duration);
     }
   }
   if (ids.length) {
@@ -219,31 +246,111 @@ function chordify(quality: keyof typeof CHORD_INTERVALS, stacks = 1) {
   clip.call('add_new_notes', { notes });
 }
 
-function major() {
-  chordify('major');
+function fixedChord(quality: FixedQuality) {
+  const intervals = FIXED_CHORDS[quality];
+  rewriteSelected(root => intervals.map(interval => root.pitch + interval));
 }
 
-function major7() {
-  chordify('major7');
+function scaleChord(toneCount: number) {
+  rewriteSelected((root, clip) => {
+    const scale = clipScale(clip);
+    if (!scale) {
+      return diatonicPitches(root.pitch, 0, [], toneCount);
+    }
+    return diatonicPitches(root.pitch, scale.tonicPc, scale.intervals, toneCount);
+  });
+}
+
+function chord() {
+  scaleChord(3);
+}
+
+function chord7() {
+  scaleChord(4);
+}
+
+function chord9() {
+  scaleChord(5);
+}
+
+function major() {
+  fixedChord('major');
 }
 
 function minor() {
-  chordify('minor');
+  fixedChord('minor');
+}
+
+function sus2() {
+  fixedChord('sus2');
+}
+
+function sus4() {
+  fixedChord('sus4');
+}
+
+function aug() {
+  fixedChord('aug');
+}
+
+function dim() {
+  fixedChord('dim');
+}
+
+function pow() {
+  fixedChord('pow');
+}
+
+function major7() {
+  fixedChord('major7');
 }
 
 function minor7() {
-  chordify('minor7');
+  fixedChord('minor7');
 }
 
-function moremoremore() {
-  chordify('major', 3);
+function dim7() {
+  fixedChord('dim7');
+}
+
+function aug7() {
+  fixedChord('aug7');
+}
+
+function major9() {
+  fixedChord('major9');
+}
+
+function minor9() {
+  fixedChord('minor9');
+}
+
+function dim9() {
+  fixedChord('dim9');
+}
+
+function aug9() {
+  fixedChord('aug9');
 }
 
 void loadbang;
 void bang;
 void cliploop;
+void chord;
+void chord7;
+void chord9;
 void major;
-void major7;
 void minor;
+void sus2;
+void sus4;
+void aug;
+void dim;
+void pow;
+void major7;
 void minor7;
-void moremoremore;
+void dim7;
+void aug7;
+void major9;
+void minor9;
+void dim9;
+void aug9;
