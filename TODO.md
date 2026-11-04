@@ -48,10 +48,7 @@ Effert rack:
 
 Midi clip
 
-- all the chord stuff and arp stuff
-- voicing stuff
 - legato
-- note preview
 - randomise velocity
 
 - or maybe just do all the crap thats there;

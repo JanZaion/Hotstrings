@@ -153,7 +153,12 @@ var BINDINGS = {
     ...Object.keys(FIXED_CHORDS).map((key) => ({ key, bind: key })),
     { key: "lead", bind: "lead" },
     { key: "up", bind: "up" },
-    { key: "down", bind: "down" }
+    { key: "down", bind: "down" },
+    { key: "doub", bind: "doub" },
+    { key: "half", bind: "half" },
+    { key: "fit", bind: "fit" },
+    { key: "inv", bind: "inv" },
+    { key: "rev", bind: "rev" }
   ]
 };
 
@@ -557,6 +562,282 @@ function down() {
   arpeggiateSelected("down");
 }
 
+// src/midiClip.ts
+var live2 = new LiveAPI();
+var detailClip3 = new LiveAPI();
+function liveApi2(path) {
+  live2.path = path;
+  return live2;
+}
+function liveValue2(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function liveInts2(raw) {
+  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
+  const out = [];
+  for (const item of items) {
+    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n)) {
+      out.push(n);
+    }
+  }
+  return out;
+}
+function getDetailMidiClip2() {
+  const songView = liveApi2("live_set view");
+  if (!songView.id || songView.id == 0) {
+    return null;
+  }
+  if (songView.call("is_view_visible", "Detail/Clip") != 1) {
+    return null;
+  }
+  detailClip3.path = "live_set view detail_clip";
+  if (!detailClip3.id || detailClip3.id == 0) {
+    return null;
+  }
+  if (liveValue2(detailClip3.get("is_midi_clip")) != 1) {
+    return null;
+  }
+  return detailClip3;
+}
+function parseNotes(raw) {
+  if (!raw) {
+    return [];
+  }
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return parsed && parsed.notes ? parsed.notes : [];
+}
+function selectedNotes2(clip) {
+  return parseNotes(clip.call("get_selected_notes_extended"));
+}
+function applySelected(update) {
+  const clip = getDetailMidiClip2();
+  if (!clip) {
+    return;
+  }
+  const selected = selectedNotes2(clip);
+  if (selected.length === 0) {
+    return;
+  }
+  const notes = update(selected, clip);
+  if (notes.length === 0) {
+    return;
+  }
+  clip.call("apply_note_modifications", { notes });
+}
+function scaleDuration(notes, factor) {
+  const out = [];
+  for (const note of notes) {
+    if (note.note_id === void 0) {
+      continue;
+    }
+    const duration = (note.duration ?? 0) * factor;
+    if (duration <= 0) {
+      continue;
+    }
+    const next = { ...note, duration };
+    out.push(next);
+  }
+  return out;
+}
+function normalizeScaleName2(name) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+function scaleIntervalsForName2(name) {
+  const normalized = normalizeScaleName2(name);
+  return SCALE_INTERVALS[normalized] ?? SCALE_INTERVALS[SCALE_ALIASES[normalized] ?? ""];
+}
+function pitchClass2(pitch) {
+  return (pitch % 12 + 12) % 12;
+}
+function clipScale2(clip) {
+  const tonic = Number(liveValue2(clip.get("root_note")));
+  const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
+  const intervals = liveInts2(clip.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
+  if (intervals.length >= 2) {
+    const scale = { tonicPc, intervals };
+    return scale;
+  }
+  const named = scaleIntervalsForName2(String(liveValue2(clip.get("scale_name")) ?? ""));
+  if (named && named.length >= 2) {
+    const scale = { tonicPc, intervals: named };
+    return scale;
+  }
+  return null;
+}
+function scalePitchClasses(scale) {
+  const pcs = [];
+  for (const interval of scale.intervals) {
+    const pc = pitchClass2(scale.tonicPc + interval);
+    if (!pcs.includes(pc)) {
+      pcs.push(pc);
+    }
+  }
+  return pcs;
+}
+function nearestScalePitch(pitch, pcs) {
+  if (pcs.length === 0) {
+    return pitch;
+  }
+  for (let dist = 0; dist <= 12; dist++) {
+    const lower = pitch - dist;
+    if (lower >= 0 && lower <= 127 && pcs.includes(pitchClass2(lower))) {
+      return lower;
+    }
+    const upper = pitch + dist;
+    if (dist > 0 && upper >= 0 && upper <= 127 && pcs.includes(pitchClass2(upper))) {
+      return upper;
+    }
+  }
+  return pitch;
+}
+function fitNotes(notes, clip) {
+  const scale = clipScale2(clip);
+  if (!scale) {
+    return [];
+  }
+  const pcs = scalePitchClasses(scale);
+  if (pcs.length === 0) {
+    return [];
+  }
+  const out = [];
+  for (const note of notes) {
+    if (note.note_id === void 0) {
+      continue;
+    }
+    const next = { ...note, pitch: nearestScalePitch(note.pitch, pcs) };
+    out.push(next);
+  }
+  return out;
+}
+function invertChromatic(notes) {
+  let minPitch = 127;
+  let maxPitch = 0;
+  for (const note of notes) {
+    if (note.pitch < minPitch) {
+      minPitch = note.pitch;
+    }
+    if (note.pitch > maxPitch) {
+      maxPitch = note.pitch;
+    }
+  }
+  const out = [];
+  for (const note of notes) {
+    if (note.note_id === void 0) {
+      continue;
+    }
+    const pitch = Math.max(0, Math.min(127, minPitch + maxPitch - note.pitch));
+    const next = { ...note, pitch };
+    out.push(next);
+  }
+  return out;
+}
+function scalePitches(pcs) {
+  const pitches = [];
+  for (let pitch = 0; pitch <= 127; pitch++) {
+    if (pcs.includes(pitchClass2(pitch))) {
+      pitches.push(pitch);
+    }
+  }
+  return pitches;
+}
+function nearestScaleIndex(pitch, pitches) {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let index = 0; index < pitches.length; index++) {
+    const candidate = pitches[index];
+    const dist = Math.abs(candidate - pitch);
+    if (dist < bestDist || dist === bestDist && candidate < pitches[best]) {
+      bestDist = dist;
+      best = index;
+    }
+  }
+  return best;
+}
+function invertScale(notes, scale) {
+  const pitches = scalePitches(scalePitchClasses(scale));
+  if (pitches.length === 0) {
+    return invertChromatic(notes);
+  }
+  const indices = [];
+  for (const note of notes) {
+    indices.push(nearestScaleIndex(note.pitch, pitches));
+  }
+  let minIndex = indices[0];
+  let maxIndex = indices[0];
+  for (const index of indices) {
+    if (index < minIndex) {
+      minIndex = index;
+    }
+    if (index > maxIndex) {
+      maxIndex = index;
+    }
+  }
+  const out = [];
+  for (let i = 0; i < notes.length; i++) {
+    const note = notes[i];
+    if (note.note_id === void 0) {
+      continue;
+    }
+    const pitch = pitches[minIndex + maxIndex - indices[i]];
+    if (pitch === void 0) {
+      continue;
+    }
+    const next = { ...note, pitch };
+    out.push(next);
+  }
+  return out;
+}
+function invertNotes(notes, clip) {
+  const scale = clipScale2(clip);
+  if (!scale) {
+    return invertChromatic(notes);
+  }
+  return invertScale(notes, scale);
+}
+function reverseNotes(notes) {
+  let minStart = Infinity;
+  let maxStart = -Infinity;
+  for (const note of notes) {
+    if (note.start_time < minStart) {
+      minStart = note.start_time;
+    }
+    if (note.start_time > maxStart) {
+      maxStart = note.start_time;
+    }
+  }
+  const out = [];
+  for (const note of notes) {
+    if (note.note_id === void 0) {
+      continue;
+    }
+    const next = { ...note, start_time: minStart + maxStart - note.start_time };
+    out.push(next);
+  }
+  return out;
+}
+function doub() {
+  applySelected((notes) => scaleDuration(notes, 2));
+}
+function half() {
+  applySelected((notes) => scaleDuration(notes, 0.5));
+}
+function fit() {
+  applySelected(fitNotes);
+}
+function inv() {
+  applySelected(invertNotes);
+}
+function rev() {
+  applySelected(reverseNotes);
+}
+
 // src/live.ts
 autowatch = 1;
 inlets = 1;
@@ -594,3 +875,8 @@ void aug9;
 void lead;
 void up;
 void down;
+void doub;
+void half;
+void fit;
+void inv;
+void rev;

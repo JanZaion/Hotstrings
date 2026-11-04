@@ -23,6 +23,7 @@ import {
   sus4,
   up,
 } from './chords';
+import { doub, fit, half, inv, rev } from './midiClip';
 
 autowatch = 1;
 inlets = 1;
@@ -64,3 +65,8 @@ void aug9;
 void lead;
 void up;
 void down;
+void doub;
+void half;
+void fit;
+void inv;
+void rev;

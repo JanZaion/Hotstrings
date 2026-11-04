@@ -11,5 +11,10 @@ export const BINDINGS: Bindings = {
     { key: 'lead', bind: 'lead' },
     { key: 'up', bind: 'up' },
     { key: 'down', bind: 'down' },
+    { key: 'doub', bind: 'doub' },
+    { key: 'half', bind: 'half' },
+    { key: 'fit', bind: 'fit' },
+    { key: 'inv', bind: 'inv' },
+    { key: 'rev', bind: 'rev' },
   ],
 };
