@@ -42,8 +42,12 @@ type LiveClip = {
   call: (func: string, ...args: unknown[]) => unknown;
 };
 
+const live = new LiveAPI() as unknown as LiveClip;
+const detailClip = new LiveAPI() as unknown as LiveClip;
+
 function liveApi(path: string) {
-  return new LiveAPI(path) as unknown as LiveClip;
+  live.path = path;
+  return live;
 }
 
 const BINDINGS: Bindings = {
@@ -115,14 +119,14 @@ function getDetailMidiClip() {
   if (songView.call('is_view_visible', 'Detail/Clip') != 1) {
     return null;
   }
-  const clip = liveApi('live_set view detail_clip');
-  if (!clip.id || clip.id == 0) {
+  detailClip.path = 'live_set view detail_clip';
+  if (!detailClip.id || detailClip.id == 0) {
     return null;
   }
-  if (liveValue(clip.get('is_midi_clip')) != 1) {
+  if (liveValue(detailClip.get('is_midi_clip')) != 1) {
     return null;
   }
-  return clip;
+  return detailClip;
 }
 
 function gridStepBeats(clip: LiveClip) {

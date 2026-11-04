@@ -2,8 +2,11 @@
 autowatch = 1;
 inlets = 1;
 outlets = 1;
+var live = new LiveAPI();
+var detailClip = new LiveAPI();
 function liveApi(path) {
-  return new LiveAPI(path);
+  live.path = path;
+  return live;
 }
 var BINDINGS = {
   hotkeys: [
@@ -65,14 +68,14 @@ function getDetailMidiClip() {
   if (songView.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  const clip = liveApi("live_set view detail_clip");
-  if (!clip.id || clip.id == 0) {
+  detailClip.path = "live_set view detail_clip";
+  if (!detailClip.id || detailClip.id == 0) {
     return null;
   }
-  if (liveValue(clip.get("is_midi_clip")) != 1) {
+  if (liveValue(detailClip.get("is_midi_clip")) != 1) {
     return null;
   }
-  return clip;
+  return detailClip;
 }
 function gridStepBeats(clip) {
   const clipView = liveApi(clip.path + " view");
