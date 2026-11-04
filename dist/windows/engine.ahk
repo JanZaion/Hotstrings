@@ -107,10 +107,11 @@ for entry in hotkeys {
     }
     keyName := String(entry["key"])
     bindName := String(entry["bind"])
+    keysToSend := entry.Has("keys") ? String(entry["keys"]) : unset
     if entry.Has("value") {
-        RegisterHot(keyName, bindName, entry["value"])
+        RegisterHot(keyName, bindName, entry["value"], keysToSend)
     } else {
-        RegisterHot(keyName, bindName)
+        RegisterHot(keyName, bindName, unset, keysToSend)
     }
 }
 HotIf LiveFocused
@@ -200,16 +201,29 @@ CapturingLive(*) {
     return capturing && LiveFocused()
 }
 
-RegisterHot(keyName, bindName, value?) {
+RegisterHot(keyName, bindName, value?, keys?) {
     global bad
+    keysToSend := IsSet(keys) ? String(keys) : ""
     fn := IsSet(value)
-        ? (*) => SendBind(bindName, value)
-        : (*) => SendBind(bindName)
+        ? (*) => FireHot(bindName, keysToSend, value)
+        : (*) => FireHot(bindName, keysToSend)
     try {
         Hotkey(keyName, fn)
     } catch as err {
         bad.Push(keyName " (" err.Message ")")
     }
+}
+
+FireHot(bindName, keysToSend, value?) {
+    if keysToSend != "" {
+        Send(keysToSend)
+        Sleep(100)
+    }
+    if IsSet(value) {
+        SendBind(bindName, value)
+        return
+    }
+    SendBind(bindName)
 }
 
 RegisterHotstring(trigger, bindName, value?) {
@@ -535,6 +549,9 @@ ParseBindArray(text, arrayName) {
         entry := Map("key", k[1], "bind", b[1])
         if RegExMatch(block, '"value"\s*:\s*(-?\d+)', &v) {
             entry["value"] := v[1] + 0
+        }
+        if RegExMatch(block, '"keys"\s*:\s*"([^"]+)"', &s) {
+            entry["keys"] := s[1]
         }
         entries.Push(entry)
         pos := m.Pos + m.Len

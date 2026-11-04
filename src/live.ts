@@ -6,6 +6,7 @@ type Bind = {
   key: string;
   bind: string;
   value?: number;
+  keys?: string;
 };
 
 type Bindings = {
@@ -39,6 +40,7 @@ type LiveClip = {
   id: number;
   path: string;
   get: (property: string) => unknown;
+  set: (property: string, value: unknown) => unknown;
   call: (func: string, ...args: unknown[]) => unknown;
 };
 
@@ -51,10 +53,7 @@ function liveApi(path: string) {
 }
 
 const BINDINGS: Bindings = {
-  hotkeys: [
-    { key: 'p', bind: 'play' },
-    { key: 'o', bind: 'stop' },
-  ],
+  hotkeys: [{ key: '`', bind: 'cliploop', keys: '^j' }],
   hotstrings: [
     { key: 'major', bind: 'major' },
     { key: 'major7', bind: 'major7' },
@@ -96,12 +95,20 @@ function sendBinds() {
   outlet(0, JSON.stringify(BINDINGS));
 }
 
-function play() {
-  liveApi('live_set').call('start_playing');
+function getDetailClip() {
+  detailClip.path = 'live_set view detail_clip';
+  if (!detailClip.id || detailClip.id == 0) {
+    return null;
+  }
+  return detailClip;
 }
 
-function stop() {
-  liveApi('live_set').call('stop_playing');
+function cliploop() {
+  const clip = getDetailClip();
+  if (!clip) {
+    return;
+  }
+  clip.set('looping', 1);
 }
 
 function liveValue(raw: unknown) {
@@ -234,8 +241,7 @@ function moremoremore() {
 
 void loadbang;
 void bang;
-void play;
-void stop;
+void cliploop;
 void major;
 void major7;
 void minor;
