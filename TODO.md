@@ -7,3 +7,65 @@
 5. make "vanilla" uneditable version
 6. add mac support
 7. check proper load order when mounting the patch
+
+## Universal keys
+
+Action buckets:
+
+- load device with presetsl, like low cut eq
+- midi actions - chords, voicing, arps, velo, grooves
+- workflow shortcuts, like pg up/down to move effect in chain
+
+Test sessions:
+
+- create a simple loop
+- drums, melody, chords, bass
+- mix that loop
+- add some audio clips
+- mix them clips
+- mix it all
+- add longer thing, cal newports sample
+
+Actual shortcuts:
+
+Audio:
+
+- warp
+- pitch #
+- gain #
+- reverse - r (butt not in clip view)
+- quantize - ctrl + u
+- loop
+
+- or maybe just do all the crap thats there;
+
+Effert rack:
+
+- moving effect back and forth
+- soloing effect / toggling on/off other effects than the selected
+- collapse/expand selected
+- when none selected, select (;first ;last)
+
+Midi clip
+
+- all the chord stuff and arp stuff
+- voicing stuff
+- legato
+- note preview
+- randomise velocity
+
+- or maybe just do all the crap thats there;
+
+Arrangement view:
+
+- insert locator with a name
+
+## Testing custom batch:
+
+Alternate Midi controls:
+
+- change annoying playback
+- change how maker moves and notes move
+- resizing left edge of note
+- create note at marker ( like last note octave or whatever)
+- swallow M because its annoying
