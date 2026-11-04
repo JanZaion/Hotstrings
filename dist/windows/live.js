@@ -1,4 +1,21 @@
-// src/theory.ts
+// src/arrangementView.ts
+var detailClip = new LiveAPI();
+function getDetailClip() {
+  detailClip.path = "live_set view detail_clip";
+  if (!detailClip.id || detailClip.id == 0) {
+    return null;
+  }
+  return detailClip;
+}
+function cliploop() {
+  const clip = getDetailClip();
+  if (!clip) {
+    return;
+  }
+  clip.set("looping", 1);
+}
+
+// src/constants.ts
 var FIXED_CHORDS = {
   major: [0, 4, 7],
   minor: [0, 3, 7],
@@ -20,6 +37,18 @@ var MAJOR_FAMILY = {
   3: FIXED_CHORDS.major,
   4: FIXED_CHORDS.major7,
   5: FIXED_CHORDS.major9
+};
+var GRID_BEATS = {
+  0: 1,
+  1: 32,
+  2: 16,
+  3: 8,
+  4: 4,
+  5: 2,
+  6: 1,
+  7: 0.5,
+  8: 0.25,
+  9: 0.125
 };
 var IONIAN = [0, 2, 4, 5, 7, 9, 11];
 var AEOLIAN = [0, 2, 3, 5, 7, 8, 10];
@@ -113,64 +142,8 @@ var SCALE_ALIASES = {
   spanish: "phrygian dominant",
   "minor gypsy": "hungarian minor"
 };
-function normalizeScaleName(name) {
-  return name.trim().replace(/\s+/g, " ").toLowerCase();
-}
-function scaleIntervalsForName(name) {
-  const normalized = normalizeScaleName(name);
-  return SCALE_INTERVALS[normalized] ?? SCALE_INTERVALS[SCALE_ALIASES[normalized] ?? ""];
-}
-function pitchClass(pitch) {
-  return (pitch % 12 + 12) % 12;
-}
-function pitchAbove(from, pc) {
-  let pitch = from;
-  while (pitchClass(pitch) !== pc) {
-    pitch += 1;
-  }
-  return pitch;
-}
-function majorFamily(toneCount) {
-  if (toneCount >= 5) {
-    return MAJOR_FAMILY[5];
-  }
-  if (toneCount >= 4) {
-    return MAJOR_FAMILY[4];
-  }
-  return MAJOR_FAMILY[3];
-}
-function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
-  const fallback = majorFamily(toneCount);
-  if (scaleIntervals.length < 2) {
-    return fallback.map((interval) => rootPitch + interval);
-  }
-  const pcs = scaleIntervals.map((interval) => pitchClass(tonicPc + interval));
-  const degree = pcs.indexOf(pitchClass(rootPitch));
-  if (degree === -1) {
-    return fallback.map((interval) => rootPitch + interval);
-  }
-  const count = Math.max(1, Math.min(5, toneCount));
-  const pitches = [];
-  let prev = rootPitch;
-  for (let i = 0; i < count; i++) {
-    const pc = pcs[(degree + i * 2) % pcs.length];
-    const pitch = i === 0 ? rootPitch : pitchAbove(prev + 1, pc);
-    pitches.push(pitch);
-    prev = pitch;
-  }
-  return pitches;
-}
 
-// src/live.ts
-autowatch = 1;
-inlets = 1;
-outlets = 1;
-var live = new LiveAPI();
-var detailClip = new LiveAPI();
-function liveApi(path) {
-  live.path = path;
-  return live;
-}
+// src/bindings.ts
 var BINDINGS = {
   hotkeys: [{ key: "`", bind: "cliploop", keys: "^j" }],
   hotstrings: [
@@ -180,40 +153,13 @@ var BINDINGS = {
     ...Object.keys(FIXED_CHORDS).map((key) => ({ key, bind: key }))
   ]
 };
-var GRID_BEATS = {
-  0: 1,
-  1: 32,
-  2: 16,
-  3: 8,
-  4: 4,
-  5: 2,
-  6: 1,
-  7: 0.5,
-  8: 0.25,
-  9: 0.125
-};
-function loadbang() {
-  sendBinds();
-}
-function bang() {
-  sendBinds();
-}
-function sendBinds() {
-  outlet(0, JSON.stringify(BINDINGS));
-}
-function getDetailClip() {
-  detailClip.path = "live_set view detail_clip";
-  if (!detailClip.id || detailClip.id == 0) {
-    return null;
-  }
-  return detailClip;
-}
-function cliploop() {
-  const clip = getDetailClip();
-  if (!clip) {
-    return;
-  }
-  clip.set("looping", 1);
+
+// src/chords.ts
+var live = new LiveAPI();
+var detailClip2 = new LiveAPI();
+function liveApi(path) {
+  live.path = path;
+  return live;
 }
 function liveValue(raw) {
   if (raw instanceof Array) {
@@ -243,14 +189,14 @@ function getDetailMidiClip() {
   if (songView.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  detailClip.path = "live_set view detail_clip";
-  if (!detailClip.id || detailClip.id == 0) {
+  detailClip2.path = "live_set view detail_clip";
+  if (!detailClip2.id || detailClip2.id == 0) {
     return null;
   }
-  if (liveValue(detailClip.get("is_midi_clip")) != 1) {
+  if (liveValue(detailClip2.get("is_midi_clip")) != 1) {
     return null;
   }
-  return detailClip;
+  return detailClip2;
 }
 function gridStepBeats(clip) {
   const clipView = liveApi(clip.path + " view");
@@ -300,6 +246,53 @@ function pushTone(notes, root, pitch, duration) {
     return;
   }
   notes.push(noteSpecFromRoot(root, pitch, duration));
+}
+function normalizeScaleName(name) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+function scaleIntervalsForName(name) {
+  const normalized = normalizeScaleName(name);
+  return SCALE_INTERVALS[normalized] ?? SCALE_INTERVALS[SCALE_ALIASES[normalized] ?? ""];
+}
+function pitchClass(pitch) {
+  return (pitch % 12 + 12) % 12;
+}
+function pitchAbove(from, pc) {
+  let pitch = from;
+  while (pitchClass(pitch) !== pc) {
+    pitch += 1;
+  }
+  return pitch;
+}
+function majorFamily(toneCount) {
+  if (toneCount >= 5) {
+    return MAJOR_FAMILY[5];
+  }
+  if (toneCount >= 4) {
+    return MAJOR_FAMILY[4];
+  }
+  return MAJOR_FAMILY[3];
+}
+function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
+  const fallback = majorFamily(toneCount);
+  if (scaleIntervals.length < 2) {
+    return fallback.map((interval) => rootPitch + interval);
+  }
+  const pcs = scaleIntervals.map((interval) => pitchClass(tonicPc + interval));
+  const degree = pcs.indexOf(pitchClass(rootPitch));
+  if (degree === -1) {
+    return fallback.map((interval) => rootPitch + interval);
+  }
+  const count = Math.max(1, Math.min(5, toneCount));
+  const pitches = [];
+  let prev = rootPitch;
+  for (let i = 0; i < count; i++) {
+    const pc = pcs[(degree + i * 2) % pcs.length];
+    const pitch = i === 0 ? rootPitch : pitchAbove(prev + 1, pc);
+    pitches.push(pitch);
+    prev = pitch;
+  }
+  return pitches;
 }
 function clipScale(clip) {
   const tonic = Number(liveValue(clip.get("root_note")));
@@ -407,6 +400,20 @@ function dim9() {
 }
 function aug9() {
   fixedChord("aug9");
+}
+
+// src/live.ts
+autowatch = 1;
+inlets = 1;
+outlets = 1;
+function loadbang() {
+  sendBinds();
+}
+function bang() {
+  sendBinds();
+}
+function sendBinds() {
+  outlet(0, JSON.stringify(BINDINGS));
 }
 void loadbang;
 void bang;
