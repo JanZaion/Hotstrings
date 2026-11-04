@@ -3,6 +3,7 @@ import unusedImports from 'eslint-plugin-unused-imports';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import max from './eslint/plugin.js';
 
 export default defineConfig([
   globalIgnores(['dist', 'node_modules', 'coverage']),
@@ -15,11 +16,12 @@ export default defineConfig([
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    plugins: { 'unused-imports': unusedImports },
+    plugins: { max, 'unused-imports': unusedImports },
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
+      'max/no-max-ctor-in-function': 'error',
       'unused-imports/no-unused-imports': 'error',
     },
   },
