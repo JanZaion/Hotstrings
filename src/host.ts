@@ -2,13 +2,6 @@ autowatch = 1;
 inlets = 1;
 outlets = 0;
 
-// [v8 host.js]
-// Keep host.js, live.js, and engine.ahk next to the .amxd.
-// [v8 live.js] outlet 0 -> prepend binds -> this v8
-// [live.toggle] -> prepend suspend -> this v8   (1 pause, 0 resume)
-// [live.toggle] -> prepend hud -> this v8       (1 on, 0 off)
-// closebang object -> quit  (also handled in this file as closebang())
-
 type HostJsThis = {
   patcher?: {
     filepath?: string;
