@@ -53,7 +53,9 @@ const BINDINGS: Bindings = {
   ],
   hotstrings: [
     { key: 'major', bind: 'major' },
+    { key: 'major7', bind: 'major7' },
     { key: 'minor', bind: 'minor' },
+    { key: 'minor7', bind: 'minor7' },
     { key: 'moremoremore', bind: 'moremoremore' },
   ],
 };
@@ -69,6 +71,13 @@ const GRID_BEATS: Record<number, number> = {
   7: 0.5,
   8: 0.25,
   9: 0.125,
+};
+
+const CHORD_INTERVALS = {
+  major: [0, 4, 7],
+  minor: [0, 3, 7],
+  major7: [0, 4, 7, 11],
+  minor7: [0, 3, 7, 10],
 };
 
 function loadbang() {
@@ -169,7 +178,7 @@ function pushTone(notes: NoteSpec[], root: MidiNote, pitch: number, duration: nu
   notes.push(noteSpecFromRoot(root, pitch, duration));
 }
 
-function chordify(quality: 'major' | 'minor', stacks = 1) {
+function chordify(quality: keyof typeof CHORD_INTERVALS, stacks = 1) {
   const clip = getDetailMidiClip();
   if (!clip) {
     return;
@@ -178,33 +187,41 @@ function chordify(quality: 'major' | 'minor', stacks = 1) {
   if (roots.length === 0) {
     return;
   }
-  const thirdOffset = quality === 'major' ? 4 : 3;
+  const intervals = CHORD_INTERVALS[quality];
   const duration = gridStepBeats(clip);
   const ids: number[] = [];
-  const triad: NoteSpec[] = [];
+  const notes: NoteSpec[] = [];
   for (const root of roots) {
     if (root.note_id !== undefined) {
       ids.push(root.note_id);
     }
     for (let oct = 0; oct < stacks; oct++) {
       const base = root.pitch + oct * 12;
-      pushTone(triad, root, base, duration);
-      pushTone(triad, root, base + thirdOffset, duration);
-      pushTone(triad, root, base + 7, duration);
+      for (const interval of intervals) {
+        pushTone(notes, root, base + interval, duration);
+      }
     }
   }
   if (ids.length) {
     clip.call('remove_notes_by_id', ids);
   }
-  clip.call('add_new_notes', { notes: triad });
+  clip.call('add_new_notes', { notes });
 }
 
 function major() {
   chordify('major');
 }
 
+function major7() {
+  chordify('major7');
+}
+
 function minor() {
   chordify('minor');
+}
+
+function minor7() {
+  chordify('minor7');
 }
 
 function moremoremore() {
@@ -216,5 +233,7 @@ void bang;
 void play;
 void stop;
 void major;
+void major7;
 void minor;
+void minor7;
 void moremoremore;

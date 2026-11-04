@@ -12,6 +12,7 @@
 HOST := "127.0.0.1"
 PORT := 7400
 HS_IDLE_MS := 2000
+HS_COMMIT_MS := 400
 CMD_PATH := A_ScriptDir "\engine-cmd.txt"
 KEYS_PATH := A_ScriptDir "\bindings.json"
 HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -250,28 +251,47 @@ StopHotstring() {
 }
 
 HsIdle(*) {
+    global hsBuffer, hsBinds
+    if hsBinds.Has(hsBuffer) {
+        FireHs()
+        return
+    }
     StopHotstring()
 }
 
 HsOnChar(char) {
     global hsBuffer, hsBinds
     hsBuffer .= StrLower(char)
-    SetTimer HsIdle, -HS_IDLE_MS
     if hsBinds.Has(hsBuffer) {
-        entry := hsBinds[hsBuffer]
-        StopHotstring()
-        if entry.Has("value") {
-            SendBind(entry["bind"], entry["value"])
-        } else {
-            SendBind(entry["bind"])
+        if HasLongerHs(hsBuffer) {
+            SetTimer HsIdle, -HS_COMMIT_MS
+            HudUpdate(hsBuffer)
+            return
         }
+        FireHs()
         return
     }
     if !IsHsPrefix(hsBuffer) {
         StopHotstring()
         return
     }
+    SetTimer HsIdle, -HS_IDLE_MS
     HudUpdate(hsBuffer)
+}
+
+FireHs() {
+    global hsBuffer, hsBinds
+    if !hsBinds.Has(hsBuffer) {
+        StopHotstring()
+        return
+    }
+    entry := hsBinds[hsBuffer]
+    StopHotstring()
+    if entry.Has("value") {
+        SendBind(entry["bind"], entry["value"])
+    } else {
+        SendBind(entry["bind"])
+    }
 }
 
 IsHsPrefix(buf) {
@@ -279,6 +299,17 @@ IsHsPrefix(buf) {
     n := StrLen(buf)
     for trigger, _ in hsBinds {
         if SubStr(trigger, 1, n) = buf {
+            return true
+        }
+    }
+    return false
+}
+
+HasLongerHs(buf) {
+    global hsBinds
+    n := StrLen(buf)
+    for trigger, _ in hsBinds {
+        if StrLen(trigger) > n && SubStr(trigger, 1, n) = buf {
             return true
         }
     }
