@@ -219,6 +219,8 @@ var BINDINGS = {
     { key: "fit", bind: "fit" },
     { key: "inv", bind: "inv" },
     { key: "rev", bind: "rev" },
+    { key: "first", bind: "first" },
+    { key: "last", bind: "last" },
     { key: "loc", bind: "loc", str: true }
   ]
 };
@@ -251,11 +253,11 @@ function liveInts(raw) {
   return out;
 }
 function getDetailMidiClip() {
-  const songView = liveApi("live_set view");
-  if (!songView.id || songView.id == 0) {
+  const songView2 = liveApi("live_set view");
+  if (!songView2.id || songView2.id == 0) {
     return null;
   }
-  if (songView.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView2.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
   detailClip2.path = "live_set view detail_clip";
@@ -382,9 +384,9 @@ function groupSelectedByStartTime(notes) {
   const sorted = notes.slice().sort((a, b) => a.start_time - b.start_time || a.pitch - b.pitch);
   const groups = [];
   for (const note of sorted) {
-    const last = groups[groups.length - 1];
-    if (last && last[0].start_time === note.start_time) {
-      last.push(note);
+    const last2 = groups[groups.length - 1];
+    if (last2 && last2[0].start_time === note.start_time) {
+      last2.push(note);
     } else {
       groups.push([note]);
     }
@@ -623,6 +625,77 @@ function down() {
   arpeggiateSelected("down");
 }
 
+// src/rack.ts
+var SCROLL_PAGES = 16;
+var SCROLL_LEFT = 2;
+var SCROLL_RIGHT = 3;
+var appView = new LiveAPI();
+var songView = new LiveAPI();
+var track = new LiveAPI();
+var device = new LiveAPI();
+var parent = new LiveAPI();
+function liveId(raw) {
+  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
+  for (const item of items) {
+    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return 0;
+}
+function currentChain() {
+  track.path = "live_set view selected_track";
+  if (!track.id || track.id == 0) {
+    return null;
+  }
+  device.path = track.path + " view selected_device";
+  if (device.id && device.id != 0) {
+    const id = liveId(device.get("canonical_parent"));
+    if (id) {
+      parent.id = id;
+      if (parent.type === "Chain") {
+        return parent;
+      }
+    }
+  }
+  return track;
+}
+function selectChainEnd(which) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const n = chain.getcount("devices");
+  if (n < 1) {
+    return;
+  }
+  const index = which === 0 ? 0 : n - 1;
+  device.path = chain.path + " devices " + index;
+  if (!device.id || device.id == 0) {
+    return;
+  }
+  const id = device.id;
+  appView.path = "live_app view";
+  appView.call("focus_view", "Detail/DeviceChain");
+  songView.path = "live_set view";
+  songView.call("select_device", "id", id);
+  const dir = which === 0 ? SCROLL_LEFT : SCROLL_RIGHT;
+  for (let i = 0; i < SCROLL_PAGES; i++) {
+    appView.call("scroll_view", dir, "Detail/DeviceChain", 0);
+  }
+  songView.call("select_device", "id", id);
+}
+function first() {
+  selectChainEnd(0);
+}
+function last() {
+  selectChainEnd(-1);
+}
+
 // src/midiClip.ts
 var live2 = new LiveAPI();
 var detailClip3 = new LiveAPI();
@@ -651,11 +724,11 @@ function liveInts2(raw) {
   return out;
 }
 function getDetailMidiClip2() {
-  const songView = liveApi2("live_set view");
-  if (!songView.id || songView.id == 0) {
+  const songView2 = liveApi2("live_set view");
+  if (!songView2.id || songView2.id == 0) {
     return null;
   }
-  if (songView.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView2.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
   detailClip3.path = "live_set view detail_clip";
@@ -942,3 +1015,5 @@ void half;
 void fit;
 void inv;
 void rev;
+void first;
+void last;

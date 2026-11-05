@@ -16,6 +16,8 @@ export const BINDINGS: Bindings = {
     { key: 'fit', bind: 'fit' },
     { key: 'inv', bind: 'inv' },
     { key: 'rev', bind: 'rev' },
+    { key: 'first', bind: 'first' },
+    { key: 'last', bind: 'last' },
     { key: 'loc', bind: 'loc', str: true },
   ],
 };
