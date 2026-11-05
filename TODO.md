@@ -28,30 +28,12 @@ Test sessions:
 
 Actual shortcuts:
 
-Audio:
-
-- warp
-- pitch #
-- gain #
-- reverse - r (butt not in clip view)
-- quantize - ctrl + u
-- loop
-
-- or maybe just do all the crap thats there;
-
 Effert rack:
 
 - moving effect back and forth
 - soloing effect / toggling on/off other effects than the selected
 - collapse/expand selected
 - when none selected, select (;first ;last)
-
-Midi clip
-
-- legato
-- randomise velocity
-
-- or maybe just do all the crap thats there;
 
 Arrangement view:
 

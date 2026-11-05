@@ -6,7 +6,7 @@
 ; writes bindings.json next to it, or:
 ;   AutoHotkey64.exe engine.ahk --quit
 ;
-; Reads bindings.json in this folder and sends OSC /bind <name> [int]
+; Reads bindings.json in this folder and sends OSC /bind <name> [int|string]
 ; to 127.0.0.1:7400 while Ableton Live is focused.
 
 HOST := "127.0.0.1"
@@ -93,7 +93,13 @@ for entry in hotstrings {
     }
     trigger := String(entry["key"])
     bindName := String(entry["bind"])
-    if entry.Has("value") {
+    if entry.Has("str") {
+        if entry.Has("value") {
+            RegisterHotstring(trigger, bindName, entry["value"], true)
+        } else {
+            RegisterHotstring(trigger, bindName, unset, true)
+        }
+    } else if entry.Has("value") {
         RegisterHotstring(trigger, bindName, entry["value"])
     } else {
         RegisterHotstring(trigger, bindName)
@@ -226,7 +232,7 @@ FireHot(bindName, keysToSend, value?) {
     SendBind(bindName)
 }
 
-RegisterHotstring(trigger, bindName, value?) {
+RegisterHotstring(trigger, bindName, value?, hasStr?) {
     global hsBinds
     t := StrLower(String(trigger))
     if t = "" {
@@ -235,6 +241,9 @@ RegisterHotstring(trigger, bindName, value?) {
     entry := Map("bind", String(bindName))
     if IsSet(value) {
         entry["value"] := value
+    }
+    if IsSet(hasStr) && hasStr {
+        entry["str"] := true
     }
     hsBinds[t] := entry
 }
@@ -265,8 +274,8 @@ StopHotstring() {
 }
 
 HsIdle(*) {
-    global hsBuffer, hsBinds
-    if hsBinds.Has(hsBuffer) {
+    global hsBuffer
+    if MatchHs(hsBuffer) {
         FireHs()
         return
     }
@@ -274,10 +283,10 @@ HsIdle(*) {
 }
 
 HsOnChar(char) {
-    global hsBuffer, hsBinds
+    global hsBuffer
     hsBuffer .= StrLower(char)
-    if hsBinds.Has(hsBuffer) {
-        if HasLongerHs(hsBuffer) {
+    if MatchHs(hsBuffer) {
+        if HasLongerHs(hsBuffer) || StrSuffixOpen(hsBuffer) {
             SetTimer HsIdle, -HS_COMMIT_MS
             HudUpdate(hsBuffer)
             return
@@ -294,25 +303,77 @@ HsOnChar(char) {
 }
 
 FireHs() {
-    global hsBuffer, hsBinds
-    if !hsBinds.Has(hsBuffer) {
-        StopHotstring()
+    global hsBuffer
+    match := MatchHs(hsBuffer)
+    StopHotstring()
+    if Type(match) != "Map" {
         return
     }
-    entry := hsBinds[hsBuffer]
-    StopHotstring()
-    if entry.Has("value") {
-        SendBind(entry["bind"], entry["value"])
+    if match.Has("strArg") {
+        SendBind(match["bind"], String(match["strArg"]))
+    } else if match.Has("value") {
+        SendBind(match["bind"], match["value"])
     } else {
-        SendBind(entry["bind"])
+        SendBind(match["bind"])
     }
+}
+
+MatchHs(buf) {
+    global hsBinds
+    if hsBinds.Has(buf) {
+        return hsBinds[buf]
+    }
+    for trigger, entry in hsBinds {
+        if !entry.Has("str") {
+            continue
+        }
+        tlen := StrLen(trigger)
+        if tlen = 0 || SubStr(buf, 1, tlen) != trigger {
+            continue
+        }
+        rest := SubStr(buf, tlen + 1)
+        if rest = "" || !RegExMatch(rest, "^[a-z0-9]+$") {
+            continue
+        }
+        return Map("bind", entry["bind"], "strArg", rest)
+    }
+    return false
+}
+
+StrSuffixOpen(buf) {
+    global hsBinds
+    for trigger, entry in hsBinds {
+        if !entry.Has("str") {
+            continue
+        }
+        tlen := StrLen(trigger)
+        if tlen = 0 || SubStr(buf, 1, tlen) != trigger {
+            continue
+        }
+        rest := SubStr(buf, tlen + 1)
+        if rest = "" || RegExMatch(rest, "^[a-z0-9]+$") {
+            return true
+        }
+    }
+    return false
 }
 
 IsHsPrefix(buf) {
     global hsBinds
     n := StrLen(buf)
-    for trigger, _ in hsBinds {
+    for trigger, entry in hsBinds {
         if SubStr(trigger, 1, n) = buf {
+            return true
+        }
+        if !entry.Has("str") {
+            continue
+        }
+        tlen := StrLen(trigger)
+        if tlen = 0 || SubStr(buf, 1, tlen) != trigger {
+            continue
+        }
+        rest := SubStr(buf, tlen + 1)
+        if rest = "" || RegExMatch(rest, "^[a-z0-9]+$") {
             return true
         }
     }
@@ -330,11 +391,12 @@ HasLongerHs(buf) {
     return false
 }
 
-SendBind(name, value?) {
-    if IsSet(value)
-        SendOsc("/bind", String(name), Integer(value))
-    else
+SendBind(name, extra?) {
+    if !IsSet(extra) {
         SendOsc("/bind", String(name))
+        return
+    }
+    SendOsc("/bind", String(name), extra)
 }
 
 InitHud() {
@@ -500,16 +562,20 @@ ConcatBuf(parts) {
     return packet
 }
 
-SendOsc(address, strArg, intArg?) {
+SendOsc(address, strArg, extra?) {
     global sock, HOST, PORT
     parts := [OscPadString(address)]
-    if IsSet(intArg) {
-        parts.Push(OscPadString(",si"))
-        parts.Push(OscPadString(strArg))
-        parts.Push(OscInt32(intArg))
-    } else {
+    if !IsSet(extra) {
         parts.Push(OscPadString(",s"))
         parts.Push(OscPadString(strArg))
+    } else if Type(extra) = "Integer" {
+        parts.Push(OscPadString(",si"))
+        parts.Push(OscPadString(strArg))
+        parts.Push(OscInt32(extra))
+    } else {
+        parts.Push(OscPadString(",ss"))
+        parts.Push(OscPadString(strArg))
+        parts.Push(OscPadString(String(extra)))
     }
     packet := ConcatBuf(parts)
 
@@ -549,6 +615,9 @@ ParseBindArray(text, arrayName) {
         entry := Map("key", k[1], "bind", b[1])
         if RegExMatch(block, '"value"\s*:\s*(-?\d+)', &v) {
             entry["value"] := v[1] + 0
+        }
+        if RegExMatch(block, '"str"\s*:\s*true') {
+            entry["str"] := true
         }
         if RegExMatch(block, '"keys"\s*:\s*"([^"]+)"', &s) {
             entry["keys"] := s[1]

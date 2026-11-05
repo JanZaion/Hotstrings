@@ -5,6 +5,7 @@ export type Bind = {
   bind: string;
   value?: number;
   keys?: string;
+  str?: boolean;
 };
 
 export type Bindings = {
@@ -41,6 +42,7 @@ export type LiveClip = {
   get: (property: string) => unknown;
   set: (property: string, value: unknown) => unknown;
   call: (func: string, ...args: unknown[]) => unknown;
+  getcount: (child: string) => number;
 };
 
 export type ClipScale = {

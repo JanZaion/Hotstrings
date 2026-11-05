@@ -1,4 +1,4 @@
-import { cliploop } from './arrangementView';
+import { cliploop, loc } from './arrangementView';
 import { BINDINGS } from './bindings';
 import {
   aug,
@@ -44,6 +44,7 @@ function sendBinds() {
 void loadbang;
 void bang;
 void cliploop;
+void loc;
 void chord;
 void chord7;
 void chord9;

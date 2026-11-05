@@ -22,7 +22,7 @@ The Max host writes `bindings.json` next to the engine, then opens the engine fi
 
 ## OSC
 
-While Ableton Live is focused, send `/bind <name> [int]` to `127.0.0.1:7400`. Bind names come from `bindings.json`.
+While Ableton Live is focused, send `/bind <name> [int|string]` to `127.0.0.1:7400`. Bind names come from `bindings.json`.
 
 ## What not to fork
 
