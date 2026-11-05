@@ -31,6 +31,7 @@ import {
   arack,
   arp,
   ash,
+  band,
   beat,
   cab,
   cc,
@@ -55,15 +56,18 @@ import {
   gate,
   glue,
   grain,
+  high,
   hyb,
   imp,
   irack,
   lim,
   loop,
+  low,
   mbd,
   meld,
   mrack,
   nlen,
+  notch,
   od,
   op,
   ped,
@@ -178,6 +182,10 @@ void drumb;
 void tube;
 void echo;
 void eq8;
+void low;
+void high;
+void notch;
+void band;
 void eq3;
 void eros;
 void exta;

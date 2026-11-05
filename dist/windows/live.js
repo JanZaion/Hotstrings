@@ -83,6 +83,7 @@ var songView = new LiveAPI();
 var track = new LiveAPI();
 var device = new LiveAPI();
 var parent = new LiveAPI();
+var param = new LiveAPI();
 var NATIVE_DEVICES = {
   ana: "Analog",
   colis: "Collision",
@@ -239,7 +240,7 @@ function selectInserted(chain, index, scrollEnd) {
 function insertAtChainEnd(name) {
   const chain = currentChain();
   if (!chain) {
-    return;
+    return false;
   }
   let index = -1;
   let scrollEnd = true;
@@ -257,16 +258,17 @@ function insertAtChainEnd(name) {
       chain.call("insert_device", name);
     }
   } catch {
-    return;
+    return false;
   }
   const n = chain.getcount("devices");
   if (n < 1) {
-    return;
+    return false;
   }
   if (index < 0) {
     index = n - 1;
   }
   selectInserted(chain, index, scrollEnd);
+  return !!(device.id && device.id != 0);
 }
 function ana() {
   insertAtChainEnd(NATIVE_DEVICES.ana);
@@ -355,8 +357,96 @@ function tube() {
 function echo() {
   insertAtChainEnd(NATIVE_DEVICES.echo);
 }
+var EQ8_LOW_CUT_12 = 1;
+var EQ8_NOTCH = 4;
+var EQ8_HIGH_CUT_12 = 6;
+var EQ8_HIGHPASS_HZ = 130;
+var EQ8_LOWPASS_HZ = 1e4;
+var EQ8_FREQ_MIN_HZ = 10;
+var EQ8_FREQ_MAX_HZ = 22e3;
+function eq8ParamPaths() {
+  const paths = {};
+  const path = device.path;
+  const n = device.getcount("parameters");
+  for (let i = 0; i < n; i++) {
+    param.path = path + " parameters " + i;
+    if (!param.id || param.id == 0) {
+      continue;
+    }
+    const name = liveValue2(param.get("name"));
+    if (typeof name === "string" && name !== "") {
+      paths[name] = param.path;
+    }
+  }
+  return paths;
+}
+function setEq8Param(path, value) {
+  if (!path) {
+    return;
+  }
+  param.path = path;
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set("value", value);
+}
+function hzToEq8Value(hz) {
+  const min = Number(liveValue2(param.get("min")));
+  const max = Number(liveValue2(param.get("max")));
+  if (Number.isFinite(min) && Number.isFinite(max) && max > 1.5) {
+    return Math.max(min, Math.min(max, hz));
+  }
+  const t = Math.log(hz / EQ8_FREQ_MIN_HZ) / Math.log(EQ8_FREQ_MAX_HZ / EQ8_FREQ_MIN_HZ);
+  return Math.max(0, Math.min(1, t));
+}
+function setEq8Freq(path, hz) {
+  if (!path) {
+    return;
+  }
+  param.path = path;
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set("value", hzToEq8Value(hz));
+}
+function configureEq8(bands) {
+  if (!device.id || device.id == 0) {
+    return;
+  }
+  const paths = eq8ParamPaths();
+  for (const band2 of bands) {
+    for (const side of ["A", "B"]) {
+      setEq8Param(paths[band2.band + " Filter On " + side], 1);
+      setEq8Param(paths[band2.band + " Filter Type " + side], band2.type);
+      if (band2.freq != null) {
+        setEq8Freq(paths[band2.band + " Frequency " + side], band2.freq);
+      }
+    }
+  }
+}
+function insertEq8Preset(bands) {
+  if (!insertAtChainEnd(NATIVE_DEVICES.eq8)) {
+    return;
+  }
+  configureEq8(bands);
+}
 function eq8() {
   insertAtChainEnd(NATIVE_DEVICES.eq8);
+}
+function low() {
+  insertEq8Preset([{ band: 4, type: EQ8_HIGH_CUT_12, freq: EQ8_LOWPASS_HZ }]);
+}
+function high() {
+  insertEq8Preset([{ band: 1, type: EQ8_LOW_CUT_12, freq: EQ8_HIGHPASS_HZ }]);
+}
+function notch() {
+  insertEq8Preset([{ band: 2, type: EQ8_NOTCH }]);
+}
+function band() {
+  insertEq8Preset([
+    { band: 1, type: EQ8_LOW_CUT_12, freq: EQ8_HIGHPASS_HZ },
+    { band: 4, type: EQ8_HIGH_CUT_12, freq: EQ8_LOWPASS_HZ }
+  ]);
 }
 function eq3() {
   insertAtChainEnd(NATIVE_DEVICES.eq3);
@@ -622,6 +712,10 @@ var BINDINGS = {
     { key: "sol", bind: "sol" },
     { key: "unsol", bind: "unsol" },
     { key: "loc", bind: "loc", str: true },
+    { key: "low", bind: "low" },
+    { key: "high", bind: "high" },
+    { key: "notch", bind: "notch" },
+    { key: "band", bind: "band" },
     ...Object.keys(NATIVE_DEVICES).map((key) => ({ key, bind: key }))
   ]
 };
@@ -1313,7 +1407,7 @@ var track2 = new LiveAPI();
 var device2 = new LiveAPI();
 var parent2 = new LiveAPI();
 var thisDev = new LiveAPI();
-var param = new LiveAPI();
+var param2 = new LiveAPI();
 function liveValue5(raw) {
   if (raw instanceof Array) {
     return raw[0];
@@ -1438,11 +1532,11 @@ function chainRight() {
   moveSelected(1);
 }
 function setDeviceOn(path, on) {
-  param.path = path + " parameters 0";
-  if (!param.id || param.id == 0) {
+  param2.path = path + " parameters 0";
+  if (!param2.id || param2.id == 0) {
     return;
   }
-  param.set("value", on);
+  param2.set("value", on);
 }
 function applyChainEffects(onFor) {
   const chain = currentChain2();
@@ -1559,6 +1653,10 @@ void drumb;
 void tube;
 void echo;
 void eq8;
+void low;
+void high;
+void notch;
+void band;
 void eq3;
 void eros;
 void exta;

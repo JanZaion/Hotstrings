@@ -28,6 +28,10 @@ export const BINDINGS: Bindings = {
     { key: 'sol', bind: 'sol' },
     { key: 'unsol', bind: 'unsol' },
     { key: 'loc', bind: 'loc', str: true },
+    { key: 'low', bind: 'low' },
+    { key: 'high', bind: 'high' },
+    { key: 'notch', bind: 'notch' },
+    { key: 'band', bind: 'band' },
     ...Object.keys(NATIVE_DEVICES).map(key => ({ key, bind: key })),
   ],
 };
