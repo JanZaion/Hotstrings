@@ -32,8 +32,6 @@ Effert rack:
 
 - moving effect back and forth
 - soloing effect / toggling on/off other effects than the selected
-- collapse/expand selected
-- when none selected, select (;first ;last)
 
 Arrangement view:
 

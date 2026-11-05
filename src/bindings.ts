@@ -18,6 +18,8 @@ export const BINDINGS: Bindings = {
     { key: 'rev', bind: 'rev' },
     { key: 'first', bind: 'first' },
     { key: 'last', bind: 'last' },
+    { key: 'col', bind: 'col' },
+    { key: 'exp', bind: 'exp' },
     { key: 'loc', bind: 'loc', str: true },
   ],
 };

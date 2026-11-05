@@ -70,10 +70,33 @@ function selectChainEnd(which: 0 | -1) {
   songView.call('select_device', 'id', id);
 }
 
+function setChainCollapsed(collapsed: 0 | 1) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const n = chain.getcount('devices');
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + ' devices ' + i + ' view';
+    if (!device.id || device.id == 0) {
+      continue;
+    }
+    device.set('is_collapsed', collapsed);
+  }
+}
+
 export function first() {
   selectChainEnd(0);
 }
 
 export function last() {
   selectChainEnd(-1);
+}
+
+export function col() {
+  setChainCollapsed(1);
+}
+
+export function exp() {
+  setChainCollapsed(0);
 }

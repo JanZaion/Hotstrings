@@ -221,6 +221,8 @@ var BINDINGS = {
     { key: "rev", bind: "rev" },
     { key: "first", bind: "first" },
     { key: "last", bind: "last" },
+    { key: "col", bind: "col" },
+    { key: "exp", bind: "exp" },
     { key: "loc", bind: "loc", str: true }
   ]
 };
@@ -475,13 +477,13 @@ function arpeggiateGroups(groups, direction, stepBeats) {
     const ordered = direction === "down" ? group.slice().reverse() : group;
     const columnCount = Math.max(1, Math.ceil(span / step));
     let used = 0;
-    for (let col = 0; col < columnCount; col++) {
+    for (let col2 = 0; col2 < columnCount; col2++) {
       const remaining = span - used;
-      const duration = col === columnCount - 1 ? remaining : Math.min(step, remaining);
+      const duration = col2 === columnCount - 1 ? remaining : Math.min(step, remaining);
       if (duration <= 0) {
         break;
       }
-      const tone = ordered[col % ordered.length];
+      const tone = ordered[col2 % ordered.length];
       pushTone(notes, tone, tone.pitch, duration, group[0].start_time + used);
       used += duration;
     }
@@ -689,11 +691,31 @@ function selectChainEnd(which) {
   }
   songView.call("select_device", "id", id);
 }
+function setChainCollapsed(collapsed) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + " devices " + i + " view";
+    if (!device.id || device.id == 0) {
+      continue;
+    }
+    device.set("is_collapsed", collapsed);
+  }
+}
 function first() {
   selectChainEnd(0);
 }
 function last() {
   selectChainEnd(-1);
+}
+function col() {
+  setChainCollapsed(1);
+}
+function exp() {
+  setChainCollapsed(0);
 }
 
 // src/midiClip.ts
@@ -1017,3 +1039,5 @@ void inv;
 void rev;
 void first;
 void last;
+void col;
+void exp;
