@@ -1,3 +1,4 @@
+import { NATIVE_DEVICES } from './actions/devices';
 import { FIXED_CHORDS } from './constants';
 import type { Bindings } from './sharedTypes';
 
@@ -27,5 +28,6 @@ export const BINDINGS: Bindings = {
     { key: 'sol', bind: 'sol' },
     { key: 'unsol', bind: 'unsol' },
     { key: 'loc', bind: 'loc', str: true },
+    ...Object.keys(NATIVE_DEVICES).map(key => ({ key, bind: key })),
   ],
 };

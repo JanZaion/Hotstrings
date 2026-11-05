@@ -28,10 +28,6 @@ Test sessions:
 
 Actual shortcuts:
 
-Midi clip
-
-- note insertion
-
 ## Testing custom batch:
 
 Alternate Midi controls:

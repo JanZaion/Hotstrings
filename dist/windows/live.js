@@ -75,6 +75,398 @@ function loc(name) {
   }
 }
 
+// src/actions/devices.ts
+var SCROLL_PAGES = 16;
+var SCROLL_RIGHT = 3;
+var appView = new LiveAPI();
+var songView = new LiveAPI();
+var track = new LiveAPI();
+var device = new LiveAPI();
+var parent = new LiveAPI();
+var NATIVE_DEVICES = {
+  ana: "Analog",
+  colis: "Collision",
+  dri: "Drift",
+  drumr: "Drum Rack",
+  elec: "Electric",
+  exti: "External Instrument",
+  imp: "Impulse",
+  irack: "Instrument Rack",
+  meld: "Meld",
+  op: "Operator",
+  samp: "Sampler",
+  simp: "Simpler",
+  ten: "Tension",
+  wav: "Wavetable",
+  amp: "Amp",
+  arack: "Audio Effect Rack",
+  af: "Auto Filter",
+  apan: "Auto Pan-Tremolo",
+  ash: "Auto Shift",
+  beat: "Beat Repeat",
+  cab: "Cabinet",
+  cheq: "Channel EQ",
+  ens: "Chorus-Ensemble",
+  comp: "Compressor",
+  corp: "Corpus",
+  del: "Delay",
+  drumb: "Drum Buss",
+  tube: "Dynamic Tube",
+  echo: "Echo",
+  eq8: "EQ Eight",
+  eq3: "EQ Three",
+  eros: "Erosion",
+  exta: "External Audio Effect",
+  fdel: "Filter Delay",
+  gate: "Gate",
+  glue: "Glue Compressor",
+  grain: "Grain Delay",
+  hyb: "Hybrid Reverb",
+  lim: "Limiter",
+  loop: "Looper",
+  mbd: "Multiband Dynamics",
+  od: "Overdrive",
+  ped: "Pedal",
+  phas: "Phaser-Flanger",
+  red: "Redux",
+  reso: "Resonators",
+  verb: "Reverb",
+  roar: "Roar",
+  sat: "Saturator",
+  shif: "Shifter",
+  sres: "Spectral Resonator",
+  stime: "Spectral Time",
+  spec: "Spectrum",
+  tun: "Tuner",
+  ut: "Utility",
+  vin: "Vinyl Distortion",
+  voc: "Vocoder",
+  arp: "Arpeggiator",
+  cc: "CC Control",
+  chordmidi: "Chord",
+  mrack: "MIDI Effect Rack",
+  nlen: "Note Length",
+  pit: "Pitch",
+  rand: "Random",
+  sca: "Scale",
+  vel: "Velocity"
+};
+var INSTRUMENT_TYPE = 1;
+var INSTRUMENT_NAMES = /* @__PURE__ */ new Set([
+  NATIVE_DEVICES.ana,
+  NATIVE_DEVICES.colis,
+  NATIVE_DEVICES.dri,
+  NATIVE_DEVICES.drumr,
+  NATIVE_DEVICES.elec,
+  NATIVE_DEVICES.exti,
+  NATIVE_DEVICES.imp,
+  NATIVE_DEVICES.irack,
+  NATIVE_DEVICES.meld,
+  NATIVE_DEVICES.op,
+  NATIVE_DEVICES.samp,
+  NATIVE_DEVICES.simp,
+  NATIVE_DEVICES.ten,
+  NATIVE_DEVICES.wav
+]);
+function liveValue2(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function liveId(raw) {
+  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
+  for (const item of items) {
+    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return 0;
+}
+function currentChain() {
+  track.path = "live_set view selected_track";
+  if (!track.id || track.id == 0) {
+    return null;
+  }
+  device.path = track.path + " view selected_device";
+  if (device.id && device.id != 0) {
+    const id = liveId(device.get("canonical_parent"));
+    if (id) {
+      parent.id = id;
+      if (parent.type === "Chain" || parent.type === "DrumChain") {
+        return parent;
+      }
+    }
+  }
+  return track;
+}
+function findInstrumentIndex(chain) {
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + " devices " + i;
+    if (!device.id || device.id == 0) {
+      continue;
+    }
+    const kind = liveValue2(device.get("type"));
+    if (kind == INSTRUMENT_TYPE || kind === "instrument") {
+      return i;
+    }
+  }
+  return -1;
+}
+function selectInserted(chain, index, scrollEnd) {
+  device.path = chain.path + " devices " + index;
+  if (!device.id || device.id == 0) {
+    return;
+  }
+  const id = device.id;
+  appView.path = "live_app view";
+  appView.call("focus_view", "Detail/DeviceChain");
+  songView.path = "live_set view";
+  songView.call("select_device", "id", id);
+  if (!scrollEnd) {
+    return;
+  }
+  for (let i = 0; i < SCROLL_PAGES; i++) {
+    appView.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
+  }
+  songView.call("select_device", "id", id);
+}
+function insertAtChainEnd(name) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  let index = -1;
+  let scrollEnd = true;
+  try {
+    if (INSTRUMENT_NAMES.has(name)) {
+      index = findInstrumentIndex(chain);
+      if (index >= 0) {
+        chain.call("delete_device", index);
+        chain.call("insert_device", name, index);
+        scrollEnd = false;
+      } else {
+        chain.call("insert_device", name);
+      }
+    } else {
+      chain.call("insert_device", name);
+    }
+  } catch {
+    return;
+  }
+  const n = chain.getcount("devices");
+  if (n < 1) {
+    return;
+  }
+  if (index < 0) {
+    index = n - 1;
+  }
+  selectInserted(chain, index, scrollEnd);
+}
+function ana() {
+  insertAtChainEnd(NATIVE_DEVICES.ana);
+}
+function colis() {
+  insertAtChainEnd(NATIVE_DEVICES.colis);
+}
+function dri() {
+  insertAtChainEnd(NATIVE_DEVICES.dri);
+}
+function drumr() {
+  insertAtChainEnd(NATIVE_DEVICES.drumr);
+}
+function elec() {
+  insertAtChainEnd(NATIVE_DEVICES.elec);
+}
+function exti() {
+  insertAtChainEnd(NATIVE_DEVICES.exti);
+}
+function imp() {
+  insertAtChainEnd(NATIVE_DEVICES.imp);
+}
+function irack() {
+  insertAtChainEnd(NATIVE_DEVICES.irack);
+}
+function meld() {
+  insertAtChainEnd(NATIVE_DEVICES.meld);
+}
+function op() {
+  insertAtChainEnd(NATIVE_DEVICES.op);
+}
+function samp() {
+  insertAtChainEnd(NATIVE_DEVICES.samp);
+}
+function simp() {
+  insertAtChainEnd(NATIVE_DEVICES.simp);
+}
+function ten() {
+  insertAtChainEnd(NATIVE_DEVICES.ten);
+}
+function wav() {
+  insertAtChainEnd(NATIVE_DEVICES.wav);
+}
+function amp() {
+  insertAtChainEnd(NATIVE_DEVICES.amp);
+}
+function arack() {
+  insertAtChainEnd(NATIVE_DEVICES.arack);
+}
+function af() {
+  insertAtChainEnd(NATIVE_DEVICES.af);
+}
+function apan() {
+  insertAtChainEnd(NATIVE_DEVICES.apan);
+}
+function ash() {
+  insertAtChainEnd(NATIVE_DEVICES.ash);
+}
+function beat() {
+  insertAtChainEnd(NATIVE_DEVICES.beat);
+}
+function cab() {
+  insertAtChainEnd(NATIVE_DEVICES.cab);
+}
+function cheq() {
+  insertAtChainEnd(NATIVE_DEVICES.cheq);
+}
+function ens() {
+  insertAtChainEnd(NATIVE_DEVICES.ens);
+}
+function comp() {
+  insertAtChainEnd(NATIVE_DEVICES.comp);
+}
+function corp() {
+  insertAtChainEnd(NATIVE_DEVICES.corp);
+}
+function del() {
+  insertAtChainEnd(NATIVE_DEVICES.del);
+}
+function drumb() {
+  insertAtChainEnd(NATIVE_DEVICES.drumb);
+}
+function tube() {
+  insertAtChainEnd(NATIVE_DEVICES.tube);
+}
+function echo() {
+  insertAtChainEnd(NATIVE_DEVICES.echo);
+}
+function eq8() {
+  insertAtChainEnd(NATIVE_DEVICES.eq8);
+}
+function eq3() {
+  insertAtChainEnd(NATIVE_DEVICES.eq3);
+}
+function eros() {
+  insertAtChainEnd(NATIVE_DEVICES.eros);
+}
+function exta() {
+  insertAtChainEnd(NATIVE_DEVICES.exta);
+}
+function fdel() {
+  insertAtChainEnd(NATIVE_DEVICES.fdel);
+}
+function gate() {
+  insertAtChainEnd(NATIVE_DEVICES.gate);
+}
+function glue() {
+  insertAtChainEnd(NATIVE_DEVICES.glue);
+}
+function grain() {
+  insertAtChainEnd(NATIVE_DEVICES.grain);
+}
+function hyb() {
+  insertAtChainEnd(NATIVE_DEVICES.hyb);
+}
+function lim() {
+  insertAtChainEnd(NATIVE_DEVICES.lim);
+}
+function loop() {
+  insertAtChainEnd(NATIVE_DEVICES.loop);
+}
+function mbd() {
+  insertAtChainEnd(NATIVE_DEVICES.mbd);
+}
+function od() {
+  insertAtChainEnd(NATIVE_DEVICES.od);
+}
+function ped() {
+  insertAtChainEnd(NATIVE_DEVICES.ped);
+}
+function phas() {
+  insertAtChainEnd(NATIVE_DEVICES.phas);
+}
+function red() {
+  insertAtChainEnd(NATIVE_DEVICES.red);
+}
+function reso() {
+  insertAtChainEnd(NATIVE_DEVICES.reso);
+}
+function verb() {
+  insertAtChainEnd(NATIVE_DEVICES.verb);
+}
+function roar() {
+  insertAtChainEnd(NATIVE_DEVICES.roar);
+}
+function sat() {
+  insertAtChainEnd(NATIVE_DEVICES.sat);
+}
+function shif() {
+  insertAtChainEnd(NATIVE_DEVICES.shif);
+}
+function sres() {
+  insertAtChainEnd(NATIVE_DEVICES.sres);
+}
+function stime() {
+  insertAtChainEnd(NATIVE_DEVICES.stime);
+}
+function spec() {
+  insertAtChainEnd(NATIVE_DEVICES.spec);
+}
+function tun() {
+  insertAtChainEnd(NATIVE_DEVICES.tun);
+}
+function ut() {
+  insertAtChainEnd(NATIVE_DEVICES.ut);
+}
+function vin() {
+  insertAtChainEnd(NATIVE_DEVICES.vin);
+}
+function voc() {
+  insertAtChainEnd(NATIVE_DEVICES.voc);
+}
+function arp() {
+  insertAtChainEnd(NATIVE_DEVICES.arp);
+}
+function cc() {
+  insertAtChainEnd(NATIVE_DEVICES.cc);
+}
+function chordmidi() {
+  insertAtChainEnd(NATIVE_DEVICES.chordmidi);
+}
+function mrack() {
+  insertAtChainEnd(NATIVE_DEVICES.mrack);
+}
+function nlen() {
+  insertAtChainEnd(NATIVE_DEVICES.nlen);
+}
+function pit() {
+  insertAtChainEnd(NATIVE_DEVICES.pit);
+}
+function rand() {
+  insertAtChainEnd(NATIVE_DEVICES.rand);
+}
+function sca() {
+  insertAtChainEnd(NATIVE_DEVICES.sca);
+}
+function vel() {
+  insertAtChainEnd(NATIVE_DEVICES.vel);
+}
+
 // src/constants.ts
 var FIXED_CHORDS = {
   major: [0, 4, 7],
@@ -229,7 +621,8 @@ var BINDINGS = {
     { key: "exp", bind: "exp" },
     { key: "sol", bind: "sol" },
     { key: "unsol", bind: "unsol" },
-    { key: "loc", bind: "loc", str: true }
+    { key: "loc", bind: "loc", str: true },
+    ...Object.keys(NATIVE_DEVICES).map((key) => ({ key, bind: key }))
   ]
 };
 
@@ -240,7 +633,7 @@ function liveApi(path) {
   live.path = path;
   return live;
 }
-function liveValue2(raw) {
+function liveValue3(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -261,18 +654,18 @@ function liveInts(raw) {
   return out;
 }
 function getDetailMidiClip() {
-  const songView2 = liveApi("live_set view");
-  if (!songView2.id || songView2.id == 0) {
+  const songView3 = liveApi("live_set view");
+  if (!songView3.id || songView3.id == 0) {
     return null;
   }
-  if (songView2.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView3.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
   detailClip2.path = "live_set view detail_clip";
   if (!detailClip2.id || detailClip2.id == 0) {
     return null;
   }
-  if (liveValue2(detailClip2.get("is_midi_clip")) != 1) {
+  if (liveValue3(detailClip2.get("is_midi_clip")) != 1) {
     return null;
   }
   return detailClip2;
@@ -282,9 +675,9 @@ function gridStepBeats(clip) {
   if (!clipView.id || clipView.id == 0) {
     return 1;
   }
-  const grid = Number(liveValue2(clipView.get("grid_quantization")));
+  const grid = Number(liveValue3(clipView.get("grid_quantization")));
   const beats = GRID_BEATS[grid] ?? 1;
-  if (liveValue2(clipView.get("grid_is_triplet")) == 1) {
+  if (liveValue3(clipView.get("grid_is_triplet")) == 1) {
     return beats * (2 / 3);
   }
   return beats;
@@ -298,27 +691,27 @@ function selectedNotes(clip) {
   return parsed && parsed.notes ? parsed.notes : [];
 }
 function noteSpecFromRoot(root, pitch, duration, startTime) {
-  const spec = {
+  const spec2 = {
     pitch,
     start_time: startTime === void 0 ? root.start_time : startTime,
     duration
   };
   if (root.velocity !== void 0) {
-    spec.velocity = root.velocity;
+    spec2.velocity = root.velocity;
   }
   if (root.mute !== void 0) {
-    spec.mute = root.mute;
+    spec2.mute = root.mute;
   }
   if (root.probability !== void 0) {
-    spec.probability = root.probability;
+    spec2.probability = root.probability;
   }
   if (root.velocity_deviation !== void 0) {
-    spec.velocity_deviation = root.velocity_deviation;
+    spec2.velocity_deviation = root.velocity_deviation;
   }
   if (root.release_velocity !== void 0) {
-    spec.release_velocity = root.release_velocity;
+    spec2.release_velocity = root.release_velocity;
   }
-  return spec;
+  return spec2;
 }
 function pushTone(notes, root, pitch, duration, startTime) {
   if (pitch < 0 || pitch > 127) {
@@ -374,14 +767,14 @@ function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
   return pitches;
 }
 function clipScale(clip) {
-  const tonic = Number(liveValue2(clip.get("root_note")));
+  const tonic = Number(liveValue3(clip.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts(clip.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName(String(liveValue2(clip.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName(String(liveValue3(clip.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -633,182 +1026,6 @@ function down() {
   arpeggiateSelected("down");
 }
 
-// src/actions/rack.ts
-var SCROLL_PAGES = 16;
-var SCROLL_LEFT = 2;
-var SCROLL_RIGHT = 3;
-var appView = new LiveAPI();
-var songView = new LiveAPI();
-var song2 = new LiveAPI();
-var track = new LiveAPI();
-var device = new LiveAPI();
-var parent = new LiveAPI();
-var thisDev = new LiveAPI();
-var param = new LiveAPI();
-function liveValue3(raw) {
-  if (raw instanceof Array) {
-    return raw[0];
-  }
-  return raw;
-}
-function liveId(raw) {
-  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
-  for (const item of items) {
-    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
-      continue;
-    }
-    const n = Number(item);
-    if (Number.isFinite(n) && n > 0) {
-      return n;
-    }
-  }
-  return 0;
-}
-function currentChain() {
-  track.path = "live_set view selected_track";
-  if (!track.id || track.id == 0) {
-    return null;
-  }
-  device.path = track.path + " view selected_device";
-  if (device.id && device.id != 0) {
-    const id = liveId(device.get("canonical_parent"));
-    if (id) {
-      parent.id = id;
-      if (parent.type === "Chain") {
-        return parent;
-      }
-    }
-  }
-  return track;
-}
-function selectChainEnd(which) {
-  const chain = currentChain();
-  if (!chain) {
-    return;
-  }
-  const n = chain.getcount("devices");
-  if (n < 1) {
-    return;
-  }
-  const index = which === 0 ? 0 : n - 1;
-  device.path = chain.path + " devices " + index;
-  if (!device.id || device.id == 0) {
-    return;
-  }
-  const id = device.id;
-  appView.path = "live_app view";
-  appView.call("focus_view", "Detail/DeviceChain");
-  songView.path = "live_set view";
-  songView.call("select_device", "id", id);
-  const dir = which === 0 ? SCROLL_LEFT : SCROLL_RIGHT;
-  for (let i = 0; i < SCROLL_PAGES; i++) {
-    appView.call("scroll_view", dir, "Detail/DeviceChain", 0);
-  }
-  songView.call("select_device", "id", id);
-}
-function setChainCollapsed(collapsed) {
-  const chain = currentChain();
-  if (!chain) {
-    return;
-  }
-  const n = chain.getcount("devices");
-  for (let i = 0; i < n; i++) {
-    device.path = chain.path + " devices " + i + " view";
-    if (!device.id || device.id == 0) {
-      continue;
-    }
-    device.set("is_collapsed", collapsed);
-  }
-}
-function first() {
-  selectChainEnd(0);
-}
-function last() {
-  selectChainEnd(-1);
-}
-function selectedDeviceIndex(chain, selectedId) {
-  const n = chain.getcount("devices");
-  for (let i = 0; i < n; i++) {
-    device.path = chain.path + " devices " + i;
-    if (device.id == selectedId) {
-      return i;
-    }
-  }
-  return -1;
-}
-function moveSelected(delta) {
-  const chain = currentChain();
-  if (!chain) {
-    return;
-  }
-  const selectedId = device.id && device.id != 0 ? device.id : 0;
-  if (!selectedId) {
-    return;
-  }
-  const n = chain.getcount("devices");
-  const index = selectedDeviceIndex(chain, selectedId);
-  if (index < 0) {
-    return;
-  }
-  const drop = delta < 0 ? index - 1 : index + 2;
-  if (drop < 0 || drop > n) {
-    return;
-  }
-  song2.path = "live_set";
-  if (!song2.id || song2.id == 0) {
-    return;
-  }
-  song2.call("move_device", "id", selectedId, "id", chain.id, drop);
-  songView.path = "live_set view";
-  songView.call("select_device", "id", selectedId);
-}
-function chainLeft() {
-  moveSelected(-1);
-}
-function chainRight() {
-  moveSelected(1);
-}
-function setDeviceOn(path, on) {
-  param.path = path + " parameters 0";
-  if (!param.id || param.id == 0) {
-    return;
-  }
-  param.set("value", on);
-}
-function applyChainEffects(onFor) {
-  const chain = currentChain();
-  if (!chain) {
-    return;
-  }
-  const selectedId = device.id && device.id != 0 ? device.id : 0;
-  thisDev.path = "this_device";
-  const selfId = thisDev.id;
-  const n = chain.getcount("devices");
-  for (let i = 0; i < n; i++) {
-    device.path = chain.path + " devices " + i;
-    if (!device.id || device.id == 0 || device.id == selfId) {
-      continue;
-    }
-    const kind = Number(liveValue3(device.get("type")));
-    if (kind != 2 && kind != 4) {
-      continue;
-    }
-    setDeviceOn(device.path, onFor(device.id, selectedId));
-  }
-}
-function col() {
-  setChainCollapsed(1);
-}
-function exp() {
-  setChainCollapsed(0);
-}
-function sol() {
-  applyChainEffects((id, selectedId) => id == selectedId ? 1 : 0);
-}
-function unsol() {
-  applyChainEffects(() => 1);
-}
-
 // src/actions/midiClip.ts
 var live2 = new LiveAPI();
 var detailClip3 = new LiveAPI();
@@ -837,11 +1054,11 @@ function liveInts2(raw) {
   return out;
 }
 function getDetailMidiClip2() {
-  const songView2 = liveApi2("live_set view");
-  if (!songView2.id || songView2.id == 0) {
+  const songView3 = liveApi2("live_set view");
+  if (!songView3.id || songView3.id == 0) {
     return null;
   }
-  if (songView2.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView3.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
   detailClip3.path = "live_set view detail_clip";
@@ -1085,6 +1302,182 @@ function rev() {
   applySelected(reverseNotes);
 }
 
+// src/actions/rack.ts
+var SCROLL_PAGES2 = 16;
+var SCROLL_LEFT = 2;
+var SCROLL_RIGHT2 = 3;
+var appView2 = new LiveAPI();
+var songView2 = new LiveAPI();
+var song2 = new LiveAPI();
+var track2 = new LiveAPI();
+var device2 = new LiveAPI();
+var parent2 = new LiveAPI();
+var thisDev = new LiveAPI();
+var param = new LiveAPI();
+function liveValue5(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function liveId2(raw) {
+  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
+  for (const item of items) {
+    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return 0;
+}
+function currentChain2() {
+  track2.path = "live_set view selected_track";
+  if (!track2.id || track2.id == 0) {
+    return null;
+  }
+  device2.path = track2.path + " view selected_device";
+  if (device2.id && device2.id != 0) {
+    const id = liveId2(device2.get("canonical_parent"));
+    if (id) {
+      parent2.id = id;
+      if (parent2.type === "Chain") {
+        return parent2;
+      }
+    }
+  }
+  return track2;
+}
+function selectChainEnd(which) {
+  const chain = currentChain2();
+  if (!chain) {
+    return;
+  }
+  const n = chain.getcount("devices");
+  if (n < 1) {
+    return;
+  }
+  const index = which === 0 ? 0 : n - 1;
+  device2.path = chain.path + " devices " + index;
+  if (!device2.id || device2.id == 0) {
+    return;
+  }
+  const id = device2.id;
+  appView2.path = "live_app view";
+  appView2.call("focus_view", "Detail/DeviceChain");
+  songView2.path = "live_set view";
+  songView2.call("select_device", "id", id);
+  const dir = which === 0 ? SCROLL_LEFT : SCROLL_RIGHT2;
+  for (let i = 0; i < SCROLL_PAGES2; i++) {
+    appView2.call("scroll_view", dir, "Detail/DeviceChain", 0);
+  }
+  songView2.call("select_device", "id", id);
+}
+function setChainCollapsed(collapsed) {
+  const chain = currentChain2();
+  if (!chain) {
+    return;
+  }
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device2.path = chain.path + " devices " + i + " view";
+    if (!device2.id || device2.id == 0) {
+      continue;
+    }
+    device2.set("is_collapsed", collapsed);
+  }
+}
+function first() {
+  selectChainEnd(0);
+}
+function last() {
+  selectChainEnd(-1);
+}
+function selectedDeviceIndex(chain, selectedId) {
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device2.path = chain.path + " devices " + i;
+    if (device2.id == selectedId) {
+      return i;
+    }
+  }
+  return -1;
+}
+function moveSelected(delta) {
+  const chain = currentChain2();
+  if (!chain) {
+    return;
+  }
+  const selectedId = device2.id && device2.id != 0 ? device2.id : 0;
+  if (!selectedId) {
+    return;
+  }
+  const n = chain.getcount("devices");
+  const index = selectedDeviceIndex(chain, selectedId);
+  if (index < 0) {
+    return;
+  }
+  const drop = delta < 0 ? index - 1 : index + 2;
+  if (drop < 0 || drop > n) {
+    return;
+  }
+  song2.path = "live_set";
+  if (!song2.id || song2.id == 0) {
+    return;
+  }
+  song2.call("move_device", "id", selectedId, "id", chain.id, drop);
+  songView2.path = "live_set view";
+  songView2.call("select_device", "id", selectedId);
+}
+function chainLeft() {
+  moveSelected(-1);
+}
+function chainRight() {
+  moveSelected(1);
+}
+function setDeviceOn(path, on) {
+  param.path = path + " parameters 0";
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set("value", on);
+}
+function applyChainEffects(onFor) {
+  const chain = currentChain2();
+  if (!chain) {
+    return;
+  }
+  const selectedId = device2.id && device2.id != 0 ? device2.id : 0;
+  thisDev.path = "this_device";
+  const selfId = thisDev.id;
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device2.path = chain.path + " devices " + i;
+    if (!device2.id || device2.id == 0 || device2.id == selfId) {
+      continue;
+    }
+    const kind = Number(liveValue5(device2.get("type")));
+    if (kind != 2 && kind != 4) {
+      continue;
+    }
+    setDeviceOn(device2.path, onFor(device2.id, selectedId));
+  }
+}
+function col() {
+  setChainCollapsed(1);
+}
+function exp() {
+  setChainCollapsed(0);
+}
+function sol() {
+  applyChainEffects((id, selectedId) => id == selectedId ? 1 : 0);
+}
+function unsol() {
+  applyChainEffects(() => 1);
+}
+
 // src/live.ts
 autowatch = 1;
 inlets = 1;
@@ -1136,3 +1529,69 @@ void col;
 void exp;
 void sol;
 void unsol;
+void ana;
+void colis;
+void dri;
+void drumr;
+void elec;
+void exti;
+void imp;
+void irack;
+void meld;
+void op;
+void samp;
+void simp;
+void ten;
+void wav;
+void amp;
+void arack;
+void af;
+void apan;
+void ash;
+void beat;
+void cab;
+void cheq;
+void ens;
+void comp;
+void corp;
+void del;
+void drumb;
+void tube;
+void echo;
+void eq8;
+void eq3;
+void eros;
+void exta;
+void fdel;
+void gate;
+void glue;
+void grain;
+void hyb;
+void lim;
+void loop;
+void mbd;
+void od;
+void ped;
+void phas;
+void red;
+void reso;
+void verb;
+void roar;
+void sat;
+void shif;
+void sres;
+void stime;
+void spec;
+void tun;
+void ut;
+void vin;
+void voc;
+void arp;
+void cc;
+void chordmidi;
+void mrack;
+void nlen;
+void pit;
+void rand;
+void sca;
+void vel;
