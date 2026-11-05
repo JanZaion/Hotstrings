@@ -15,7 +15,7 @@ HS_IDLE_MS := 2000
 HS_COMMIT_MS := 400
 CMD_PATH := A_ScriptDir "\engine-cmd.txt"
 KEYS_PATH := A_ScriptDir "\bindings.json"
-HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789"
+HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789=-"
 
 hsBinds := Map()
 hsBuffer := ""
@@ -97,16 +97,12 @@ for entry in hotstrings {
     }
     trigger := String(entry["key"])
     bindName := String(entry["bind"])
-    if entry.Has("str") {
-        if entry.Has("value") {
-            RegisterHotstring(trigger, bindName, entry["value"], true)
-        } else {
-            RegisterHotstring(trigger, bindName, unset, true)
-        }
-    } else if entry.Has("value") {
-        RegisterHotstring(trigger, bindName, entry["value"])
+    hasStr := entry.Has("str")
+    hasInt := entry.Has("int")
+    if entry.Has("value") {
+        RegisterHotstring(trigger, bindName, entry["value"], hasStr, hasInt)
     } else {
-        RegisterHotstring(trigger, bindName)
+        RegisterHotstring(trigger, bindName, unset, hasStr, hasInt)
     }
 }
 
@@ -278,7 +274,7 @@ FireHot(bindName, keysToSend, value?) {
     SendBind(bindName)
 }
 
-RegisterHotstring(trigger, bindName, value?, hasStr?) {
+RegisterHotstring(trigger, bindName, value?, hasStr?, hasInt?) {
     global hsBinds
     t := StrLower(String(trigger))
     if t = "" {
@@ -290,6 +286,9 @@ RegisterHotstring(trigger, bindName, value?, hasStr?) {
     }
     if IsSet(hasStr) && hasStr {
         entry["str"] := true
+    }
+    if IsSet(hasInt) && hasInt {
+        entry["int"] := true
     }
     hsBinds[t] := entry
 }
@@ -339,7 +338,7 @@ HsOnChar(char) {
     global hsBuffer
     hsBuffer .= StrLower(char)
     if MatchHs(hsBuffer) {
-        if HasLongerHs(hsBuffer) || StrSuffixOpen(hsBuffer) {
+        if HasLongerHs(hsBuffer) || SuffixOpen(hsBuffer) {
             SetTimer HsIdle, -HS_COMMIT_MS
             HudUpdate(hsBuffer)
             return
@@ -364,6 +363,8 @@ FireHs() {
     }
     if match.Has("strArg") {
         SendBind(match["bind"], String(match["strArg"]))
+    } else if match.Has("intArg") {
+        SendBind(match["bind"], Integer(match["intArg"]))
     } else if match.Has("value") {
         SendBind(match["bind"], match["value"])
     } else {
@@ -374,17 +375,26 @@ FireHs() {
 MatchHs(buf) {
     global hsBinds
     if hsBinds.Has(buf) {
-        return hsBinds[buf]
+        entry := hsBinds[buf]
+        if !entry.Has("int") {
+            return entry
+        }
     }
     for trigger, entry in hsBinds {
-        if !entry.Has("str") {
-            continue
-        }
         tlen := StrLen(trigger)
         if tlen = 0 || SubStr(buf, 1, tlen) != trigger {
             continue
         }
         rest := SubStr(buf, tlen + 1)
+        if entry.Has("int") {
+            if rest = "" || !RegExMatch(rest, "^\d+$") {
+                continue
+            }
+            return Map("bind", entry["bind"], "intArg", Integer(rest))
+        }
+        if !entry.Has("str") {
+            continue
+        }
         if rest = "" || !RegExMatch(rest, "^[a-z0-9]+$") {
             continue
         }
@@ -393,19 +403,22 @@ MatchHs(buf) {
     return false
 }
 
-StrSuffixOpen(buf) {
+SuffixOpen(buf) {
     global hsBinds
     for trigger, entry in hsBinds {
-        if !entry.Has("str") {
-            continue
-        }
         tlen := StrLen(trigger)
         if tlen = 0 || SubStr(buf, 1, tlen) != trigger {
             continue
         }
         rest := SubStr(buf, tlen + 1)
-        if rest = "" || RegExMatch(rest, "^[a-z0-9]+$") {
-            return true
+        if entry.Has("int") {
+            if rest = "" || RegExMatch(rest, "^\d+$") {
+                return true
+            }
+        } else if entry.Has("str") {
+            if rest = "" || RegExMatch(rest, "^[a-z0-9]+$") {
+                return true
+            }
         }
     }
     return false
@@ -418,16 +431,19 @@ IsHsPrefix(buf) {
         if SubStr(trigger, 1, n) = buf {
             return true
         }
-        if !entry.Has("str") {
-            continue
-        }
         tlen := StrLen(trigger)
         if tlen = 0 || SubStr(buf, 1, tlen) != trigger {
             continue
         }
         rest := SubStr(buf, tlen + 1)
-        if rest = "" || RegExMatch(rest, "^[a-z0-9]+$") {
-            return true
+        if entry.Has("int") {
+            if rest = "" || RegExMatch(rest, "^\d+$") {
+                return true
+            }
+        } else if entry.Has("str") {
+            if rest = "" || RegExMatch(rest, "^[a-z0-9]+$") {
+                return true
+            }
         }
     }
     return false
@@ -671,6 +687,9 @@ ParseBindArray(text, arrayName) {
         }
         if RegExMatch(block, '"str"\s*:\s*true') {
             entry["str"] := true
+        }
+        if RegExMatch(block, '"int"\s*:\s*true') {
+            entry["int"] := true
         }
         if RegExMatch(block, '"keys"\s*:\s*"([^"]+)"', &s) {
             entry["keys"] := s[1]

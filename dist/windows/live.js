@@ -712,6 +712,8 @@ var BINDINGS = {
     { key: "sol", bind: "sol" },
     { key: "unsol", bind: "unsol" },
     { key: "loc", bind: "loc", str: true },
+    { key: "=", bind: "volup", int: true },
+    { key: "-", bind: "voldown", int: true },
     { key: "low", bind: "low" },
     { key: "high", bind: "high" },
     { key: "notch", bind: "notch" },
@@ -1396,19 +1398,112 @@ function rev() {
   applySelected(reverseNotes);
 }
 
+// src/actions/mixer.ts
+var STEP_DB = 3;
+var MAX_DB = 6;
+var MIN_DB = -70;
+var LINEAR_MIN_DB = -18;
+var LINEAR_MIN_VALUE = 0.4;
+var MID_MIN_DB = -41;
+var MID_MIN_VALUE = 0.15;
+var MID_ALPHA = 799.503788;
+var MID_BETA = 12630.61132;
+var MID_GAMMA = 201.871345;
+var MID_DELTA = 399.751894;
+var LOW_ALPHA = 70;
+var LOW_BETA = 118.426374;
+var LOW_GAMMA = 7504 / 5567;
+var song2 = new LiveAPI();
+var volume = new LiveAPI();
+function liveValue5(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function parseTrackNumber(raw) {
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) {
+    return 0;
+  }
+  return n;
+}
+function liveToDb(value) {
+  if (value <= 0) {
+    return MIN_DB;
+  }
+  if (value >= LINEAR_MIN_VALUE) {
+    return 40 * value - 34;
+  }
+  if (value >= MID_MIN_VALUE) {
+    const x = MID_DELTA * value - MID_GAMMA;
+    return -(x * x + MID_BETA) / MID_ALPHA;
+  }
+  return LOW_BETA * Math.pow(value, 1 / LOW_GAMMA) - LOW_ALPHA;
+}
+function dbToLive(db) {
+  if (db >= MAX_DB) {
+    return 1;
+  }
+  if (db >= LINEAR_MIN_DB) {
+    return (db + 34) / 40;
+  }
+  if (db >= MID_MIN_DB) {
+    return -(Math.sqrt(-MID_ALPHA * db - MID_BETA) - MID_GAMMA) / MID_DELTA;
+  }
+  if (db <= MIN_DB) {
+    return 0;
+  }
+  return Math.pow((db + LOW_ALPHA) / LOW_BETA, LOW_GAMMA);
+}
+function bumpTrack(trackNumber, deltaDb) {
+  const n = parseTrackNumber(trackNumber);
+  if (n < 1) {
+    return;
+  }
+  song2.path = "live_set";
+  if (!song2.id || song2.id == 0) {
+    return;
+  }
+  const count = song2.getcount("tracks");
+  if (n > count) {
+    return;
+  }
+  volume.path = "live_set tracks " + (n - 1) + " mixer_device volume";
+  if (!volume.id || volume.id == 0) {
+    return;
+  }
+  const current = Number(liveValue5(volume.get("value")));
+  if (!Number.isFinite(current)) {
+    return;
+  }
+  const min = Number(liveValue5(volume.get("min")));
+  const max = Number(liveValue5(volume.get("max")));
+  const lo = Number.isFinite(min) ? min : 0;
+  const hi = Number.isFinite(max) ? max : 1;
+  const next = dbToLive(liveToDb(current) + deltaDb);
+  volume.set("value", Math.max(lo, Math.min(hi, next)));
+}
+function volup(trackNumber) {
+  bumpTrack(trackNumber, STEP_DB);
+}
+function voldown(trackNumber) {
+  bumpTrack(trackNumber, -STEP_DB);
+}
+
 // src/actions/rack.ts
 var SCROLL_PAGES2 = 16;
 var SCROLL_LEFT = 2;
 var SCROLL_RIGHT2 = 3;
 var appView2 = new LiveAPI();
 var songView2 = new LiveAPI();
-var song2 = new LiveAPI();
+var song3 = new LiveAPI();
 var track2 = new LiveAPI();
 var device2 = new LiveAPI();
 var parent2 = new LiveAPI();
 var thisDev = new LiveAPI();
 var param2 = new LiveAPI();
-function liveValue5(raw) {
+function liveValue6(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1517,11 +1612,11 @@ function moveSelected(delta) {
   if (drop < 0 || drop > n) {
     return;
   }
-  song2.path = "live_set";
-  if (!song2.id || song2.id == 0) {
+  song3.path = "live_set";
+  if (!song3.id || song3.id == 0) {
     return;
   }
-  song2.call("move_device", "id", selectedId, "id", chain.id, drop);
+  song3.call("move_device", "id", selectedId, "id", chain.id, drop);
   songView2.path = "live_set view";
   songView2.call("select_device", "id", selectedId);
 }
@@ -1552,7 +1647,7 @@ function applyChainEffects(onFor) {
     if (!device2.id || device2.id == 0 || device2.id == selfId) {
       continue;
     }
-    const kind = Number(liveValue5(device2.get("type")));
+    const kind = Number(liveValue6(device2.get("type")));
     if (kind != 2 && kind != 4) {
       continue;
     }
@@ -1589,6 +1684,8 @@ void loadbang;
 void bang;
 void cliploop;
 void loc;
+void volup;
+void voldown;
 void chord;
 void chord7;
 void chord9;

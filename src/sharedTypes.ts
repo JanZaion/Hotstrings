@@ -6,6 +6,7 @@ export type Bind = {
   value?: number;
   keys?: string;
   str?: boolean;
+  int?: boolean;
 };
 
 export type Bindings = {

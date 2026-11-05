@@ -96,6 +96,7 @@ import {
   wav,
 } from './actions/devices';
 import { doub, fit, half, inv, rev } from './actions/midiClip';
+import { volup, voldown } from './actions/mixer';
 import { chainLeft, chainRight, col, exp, first, last, sol, unsol } from './actions/rack';
 
 autowatch = 1;
@@ -118,6 +119,8 @@ void loadbang;
 void bang;
 void cliploop;
 void loc;
+void volup;
+void voldown;
 void chord;
 void chord7;
 void chord9;
