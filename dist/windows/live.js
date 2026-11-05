@@ -1,4 +1,4 @@
-// src/arrangementView.ts
+// src/actions/arrangementView.ts
 var CUE_EPS = 0.01;
 var detailClip = new LiveAPI();
 var song = new LiveAPI();
@@ -233,7 +233,7 @@ var BINDINGS = {
   ]
 };
 
-// src/chords.ts
+// src/actions/chords.ts
 var live = new LiveAPI();
 var detailClip2 = new LiveAPI();
 function liveApi(path) {
@@ -633,7 +633,7 @@ function down() {
   arpeggiateSelected("down");
 }
 
-// src/rack.ts
+// src/actions/rack.ts
 var SCROLL_PAGES = 16;
 var SCROLL_LEFT = 2;
 var SCROLL_RIGHT = 3;
@@ -809,7 +809,7 @@ function unsol() {
   applyChainEffects(() => 1);
 }
 
-// src/midiClip.ts
+// src/actions/midiClip.ts
 var live2 = new LiveAPI();
 var detailClip3 = new LiveAPI();
 function liveApi2(path) {

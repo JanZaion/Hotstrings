@@ -1,4 +1,4 @@
-import { cliploop, loc } from './arrangementView';
+import { cliploop, loc } from './actions/arrangementView';
 import { BINDINGS } from './bindings';
 import {
   aug,
@@ -22,9 +22,9 @@ import {
   sus2,
   sus4,
   up,
-} from './chords';
-import { chainLeft, chainRight, col, exp, first, last, sol, unsol } from './rack';
-import { doub, fit, half, inv, rev } from './midiClip';
+} from './actions/chords';
+import { chainLeft, chainRight, col, exp, first, last, sol, unsol } from './actions/rack';
+import { doub, fit, half, inv, rev } from './actions/midiClip';
 
 autowatch = 1;
 inlets = 1;

@@ -1,5 +1,5 @@
-import { SCALE_ALIASES, SCALE_INTERVALS } from './constants';
-import type { ClipScale, LiveClip, MidiNote } from './sharedTypes';
+import { SCALE_ALIASES, SCALE_INTERVALS } from '../constants';
+import type { ClipScale, LiveClip, MidiNote } from '../sharedTypes';
 
 const live = new LiveAPI() as unknown as LiveClip;
 const detailClip = new LiveAPI() as unknown as LiveClip;

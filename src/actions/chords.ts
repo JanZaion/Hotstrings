@@ -4,8 +4,8 @@ import {
   MAJOR_FAMILY,
   SCALE_ALIASES,
   SCALE_INTERVALS,
-} from './constants';
-import type { ClipScale, FixedQuality, LiveClip, MidiNote, NoteSpec } from './sharedTypes';
+} from '../constants';
+import type { ClipScale, FixedQuality, LiveClip, MidiNote, NoteSpec } from '../sharedTypes';
 
 const live = new LiveAPI() as unknown as LiveClip;
 const detailClip = new LiveAPI() as unknown as LiveClip;

@@ -1,4 +1,4 @@
-import type { LiveClip } from './sharedTypes';
+import type { LiveClip } from '../sharedTypes';
 
 const CUE_EPS = 0.01;
 

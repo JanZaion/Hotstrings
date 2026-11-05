@@ -1,4 +1,4 @@
-import type { LiveClip } from './sharedTypes';
+import type { LiveClip } from '../sharedTypes';
 
 type LiveObj = LiveClip & { type: string };
 
