@@ -23,7 +23,7 @@ import {
   sus4,
   up,
 } from './chords';
-import { col, exp, first, last } from './rack';
+import { col, exp, first, last, sol, unsol } from './rack';
 import { doub, fit, half, inv, rev } from './midiClip';
 
 autowatch = 1;
@@ -76,3 +76,5 @@ void first;
 void last;
 void col;
 void exp;
+void sol;
+void unsol;

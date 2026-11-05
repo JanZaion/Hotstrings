@@ -28,6 +28,10 @@ Test sessions:
 
 Actual shortcuts:
 
+Midi clip
+
+- note insertion
+
 Effert rack:
 
 - moving effect back and forth

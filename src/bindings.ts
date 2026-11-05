@@ -20,6 +20,8 @@ export const BINDINGS: Bindings = {
     { key: 'last', bind: 'last' },
     { key: 'col', bind: 'col' },
     { key: 'exp', bind: 'exp' },
+    { key: 'sol', bind: 'sol' },
+    { key: 'unsol', bind: 'unsol' },
     { key: 'loc', bind: 'loc', str: true },
   ],
 };

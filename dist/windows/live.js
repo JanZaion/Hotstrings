@@ -223,6 +223,8 @@ var BINDINGS = {
     { key: "last", bind: "last" },
     { key: "col", bind: "col" },
     { key: "exp", bind: "exp" },
+    { key: "sol", bind: "sol" },
+    { key: "unsol", bind: "unsol" },
     { key: "loc", bind: "loc", str: true }
   ]
 };
@@ -636,6 +638,14 @@ var songView = new LiveAPI();
 var track = new LiveAPI();
 var device = new LiveAPI();
 var parent = new LiveAPI();
+var thisDev = new LiveAPI();
+var param = new LiveAPI();
+function liveValue3(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
 function liveId(raw) {
   const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
   for (const item of items) {
@@ -711,11 +721,45 @@ function first() {
 function last() {
   selectChainEnd(-1);
 }
+function setDeviceOn(path, on) {
+  param.path = path + " parameters 0";
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set("value", on);
+}
+function applyChainEffects(onFor) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const selectedId = device.id && device.id != 0 ? device.id : 0;
+  thisDev.path = "this_device";
+  const selfId = thisDev.id;
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + " devices " + i;
+    if (!device.id || device.id == 0 || device.id == selfId) {
+      continue;
+    }
+    const kind = Number(liveValue3(device.get("type")));
+    if (kind != 2 && kind != 4) {
+      continue;
+    }
+    setDeviceOn(device.path, onFor(device.id, selectedId));
+  }
+}
 function col() {
   setChainCollapsed(1);
 }
 function exp() {
   setChainCollapsed(0);
+}
+function sol() {
+  applyChainEffects((id, selectedId) => id == selectedId ? 1 : 0);
+}
+function unsol() {
+  applyChainEffects(() => 1);
 }
 
 // src/midiClip.ts
@@ -725,7 +769,7 @@ function liveApi2(path) {
   live2.path = path;
   return live2;
 }
-function liveValue3(raw) {
+function liveValue4(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -757,7 +801,7 @@ function getDetailMidiClip2() {
   if (!detailClip3.id || detailClip3.id == 0) {
     return null;
   }
-  if (liveValue3(detailClip3.get("is_midi_clip")) != 1) {
+  if (liveValue4(detailClip3.get("is_midi_clip")) != 1) {
     return null;
   }
   return detailClip3;
@@ -813,14 +857,14 @@ function pitchClass2(pitch) {
   return (pitch % 12 + 12) % 12;
 }
 function clipScale2(clip) {
-  const tonic = Number(liveValue3(clip.get("root_note")));
+  const tonic = Number(liveValue4(clip.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts2(clip.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName2(String(liveValue3(clip.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName2(String(liveValue4(clip.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1041,3 +1085,5 @@ void first;
 void last;
 void col;
 void exp;
+void sol;
+void unsol;

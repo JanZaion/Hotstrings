@@ -11,6 +11,15 @@ const songView = new LiveAPI() as unknown as LiveObj;
 const track = new LiveAPI() as unknown as LiveObj;
 const device = new LiveAPI() as unknown as LiveObj;
 const parent = new LiveAPI() as unknown as LiveObj;
+const thisDev = new LiveAPI() as unknown as LiveObj;
+const param = new LiveAPI() as unknown as LiveObj;
+
+function liveValue(raw: unknown) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
 
 function liveId(raw: unknown) {
   const items = raw instanceof Array ? raw : raw == null || raw === '' ? [] : [raw];
@@ -93,10 +102,48 @@ export function last() {
   selectChainEnd(-1);
 }
 
+function setDeviceOn(path: string, on: 0 | 1) {
+  param.path = path + ' parameters 0';
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set('value', on);
+}
+
+function applyChainEffects(onFor: (id: number, selectedId: number) => 0 | 1) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const selectedId = device.id && device.id != 0 ? device.id : 0;
+  thisDev.path = 'this_device';
+  const selfId = thisDev.id;
+  const n = chain.getcount('devices');
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + ' devices ' + i;
+    if (!device.id || device.id == 0 || device.id == selfId) {
+      continue;
+    }
+    const kind = Number(liveValue(device.get('type')));
+    if (kind != 2 && kind != 4) {
+      continue;
+    }
+    setDeviceOn(device.path, onFor(device.id, selectedId));
+  }
+}
+
 export function col() {
   setChainCollapsed(1);
 }
 
 export function exp() {
   setChainCollapsed(0);
+}
+
+export function sol() {
+  applyChainEffects((id, selectedId) => (id == selectedId ? 1 : 0));
+}
+
+export function unsol() {
+  applyChainEffects(() => 1);
 }
