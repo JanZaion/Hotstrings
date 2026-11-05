@@ -8,6 +8,7 @@ const SCROLL_RIGHT = 3;
 
 const appView = new LiveAPI() as unknown as LiveObj;
 const songView = new LiveAPI() as unknown as LiveObj;
+const song = new LiveAPI() as unknown as LiveObj;
 const track = new LiveAPI() as unknown as LiveObj;
 const device = new LiveAPI() as unknown as LiveObj;
 const parent = new LiveAPI() as unknown as LiveObj;
@@ -100,6 +101,52 @@ export function first() {
 
 export function last() {
   selectChainEnd(-1);
+}
+
+function selectedDeviceIndex(chain: LiveObj, selectedId: number) {
+  const n = chain.getcount('devices');
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + ' devices ' + i;
+    if (device.id == selectedId) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function moveSelected(delta: -1 | 1) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const selectedId = device.id && device.id != 0 ? device.id : 0;
+  if (!selectedId) {
+    return;
+  }
+  const n = chain.getcount('devices');
+  const index = selectedDeviceIndex(chain, selectedId);
+  if (index < 0) {
+    return;
+  }
+  const drop = delta < 0 ? index - 1 : index + 2;
+  if (drop < 0 || drop > n) {
+    return;
+  }
+  song.path = 'live_set';
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  song.call('move_device', 'id', selectedId, 'id', chain.id, drop);
+  songView.path = 'live_set view';
+  songView.call('select_device', 'id', selectedId);
+}
+
+export function chainLeft() {
+  moveSelected(-1);
+}
+
+export function chainRight() {
+  moveSelected(1);
 }
 
 function setDeviceOn(path: string, on: 0 | 1) {

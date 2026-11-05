@@ -2,7 +2,11 @@ import { FIXED_CHORDS } from './constants';
 import type { Bindings } from './sharedTypes';
 
 export const BINDINGS: Bindings = {
-  hotkeys: [{ key: '`', bind: 'cliploop', keys: '^j' }],
+  hotkeys: [
+    { key: '`', bind: 'cliploop', keys: '^j' },
+    { key: '^!Left', bind: 'chainLeft' },
+    { key: '^!Right', bind: 'chainRight' },
+  ],
   hotstrings: [
     { key: 'chord', bind: 'chord' },
     { key: 'chord7', bind: 'chord7' },

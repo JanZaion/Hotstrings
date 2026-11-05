@@ -205,7 +205,11 @@ var SCALE_ALIASES = {
 
 // src/bindings.ts
 var BINDINGS = {
-  hotkeys: [{ key: "`", bind: "cliploop", keys: "^j" }],
+  hotkeys: [
+    { key: "`", bind: "cliploop", keys: "^j" },
+    { key: "^!Left", bind: "chainLeft" },
+    { key: "^!Right", bind: "chainRight" }
+  ],
   hotstrings: [
     { key: "chord", bind: "chord" },
     { key: "chord7", bind: "chord7" },
@@ -635,6 +639,7 @@ var SCROLL_LEFT = 2;
 var SCROLL_RIGHT = 3;
 var appView = new LiveAPI();
 var songView = new LiveAPI();
+var song2 = new LiveAPI();
 var track = new LiveAPI();
 var device = new LiveAPI();
 var parent = new LiveAPI();
@@ -720,6 +725,48 @@ function first() {
 }
 function last() {
   selectChainEnd(-1);
+}
+function selectedDeviceIndex(chain, selectedId) {
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + " devices " + i;
+    if (device.id == selectedId) {
+      return i;
+    }
+  }
+  return -1;
+}
+function moveSelected(delta) {
+  const chain = currentChain();
+  if (!chain) {
+    return;
+  }
+  const selectedId = device.id && device.id != 0 ? device.id : 0;
+  if (!selectedId) {
+    return;
+  }
+  const n = chain.getcount("devices");
+  const index = selectedDeviceIndex(chain, selectedId);
+  if (index < 0) {
+    return;
+  }
+  const drop = delta < 0 ? index - 1 : index + 2;
+  if (drop < 0 || drop > n) {
+    return;
+  }
+  song2.path = "live_set";
+  if (!song2.id || song2.id == 0) {
+    return;
+  }
+  song2.call("move_device", "id", selectedId, "id", chain.id, drop);
+  songView.path = "live_set view";
+  songView.call("select_device", "id", selectedId);
+}
+function chainLeft() {
+  moveSelected(-1);
+}
+function chainRight() {
+  moveSelected(1);
 }
 function setDeviceOn(path, on) {
   param.path = path + " parameters 0";
@@ -1083,6 +1130,8 @@ void inv;
 void rev;
 void first;
 void last;
+void chainLeft;
+void chainRight;
 void col;
 void exp;
 void sol;

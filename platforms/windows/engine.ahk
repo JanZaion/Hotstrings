@@ -117,7 +117,7 @@ for entry in hotkeys {
     }
     keyName := String(entry["key"])
     bindName := String(entry["bind"])
-    keysToSend := entry.Has("keys") ? String(entry["keys"]) : unset
+    keysToSend := entry.Has("keys") ? String(entry["keys"]) : ""
     if entry.Has("value") {
         RegisterHot(keyName, bindName, entry["value"], keysToSend)
     } else {

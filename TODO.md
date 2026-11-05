@@ -32,15 +32,6 @@ Midi clip
 
 - note insertion
 
-Effert rack:
-
-- moving effect back and forth
-- soloing effect / toggling on/off other effects than the selected
-
-Arrangement view:
-
-- insert locator with a name
-
 ## Testing custom batch:
 
 Alternate Midi controls:
