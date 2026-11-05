@@ -41,7 +41,7 @@ export type LiveClip = {
   id: number;
   path: string;
   get: (property: string) => unknown;
-  set: (property: string, value: unknown) => unknown;
+  set: (property: string, ...args: unknown[]) => unknown;
   call: (func: string, ...args: unknown[]) => unknown;
   getcount: (child: string) => number;
 };

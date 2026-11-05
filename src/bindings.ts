@@ -28,6 +28,7 @@ export const BINDINGS: Bindings = {
     { key: 'sol', bind: 'sol' },
     { key: 'unsol', bind: 'unsol' },
     { key: 'loc', bind: 'loc', str: true },
+    { key: 'clip', bind: 'clip', int: true },
     { key: '=', bind: 'volup', int: true },
     { key: '-', bind: 'voldown', int: true },
     { key: 'low', bind: 'low' },

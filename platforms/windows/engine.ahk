@@ -387,7 +387,10 @@ MatchHs(buf) {
         }
         rest := SubStr(buf, tlen + 1)
         if entry.Has("int") {
-            if rest = "" || !RegExMatch(rest, "^\d+$") {
+            if rest = "" {
+                return entry
+            }
+            if !RegExMatch(rest, "^\d+$") {
                 continue
             }
             return Map("bind", entry["bind"], "intArg", Integer(rest))

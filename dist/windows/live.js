@@ -1,13 +1,47 @@
 // src/actions/arrangementView.ts
 var CUE_EPS = 0.01;
+var DEFAULT_BARS = 4;
+var BEATS_PER_QUARTER = 4;
 var detailClip = new LiveAPI();
 var song = new LiveAPI();
 var cue = new LiveAPI();
+var track = new LiveAPI();
+var songView = new LiveAPI();
 function liveValue(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
   return raw;
+}
+function liveId(raw) {
+  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
+  for (const item of items) {
+    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return 0;
+}
+function parseBars(raw) {
+  if (raw == null || raw === "") {
+    return DEFAULT_BARS;
+  }
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) {
+    return DEFAULT_BARS;
+  }
+  return n;
+}
+function beatsPerBar() {
+  const num = Number(liveValue(song.get("signature_numerator")));
+  const den = Number(liveValue(song.get("signature_denominator")));
+  const numerator = Number.isFinite(num) && num > 0 ? num : 4;
+  const denominator = Number.isFinite(den) && den > 0 ? den : 4;
+  return numerator * (BEATS_PER_QUARTER / denominator);
 }
 function getDetailClip() {
   detailClip.path = "live_set view detail_clip";
@@ -36,11 +70,11 @@ function findCueAt(time) {
   return cue;
 }
 function cliploop() {
-  const clip = getDetailClip();
-  if (!clip) {
+  const clip2 = getDetailClip();
+  if (!clip2) {
     return;
   }
-  clip.set("looping", 1);
+  clip2.set("looping", 1);
 }
 function loc(name) {
   song.path = "live_set";
@@ -74,13 +108,47 @@ function loc(name) {
     created.set("name", label);
   }
 }
+function clip(bars) {
+  song.path = "live_set";
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  track.path = "live_set view selected_track";
+  if (!track.id || track.id == 0) {
+    return;
+  }
+  if (liveValue(track.get("has_midi_input")) != 1) {
+    return;
+  }
+  if (liveValue(track.get("is_frozen")) == 1) {
+    return;
+  }
+  const marker = Number(liveValue(song.get("start_time")));
+  if (!Number.isFinite(marker) || marker < 0) {
+    return;
+  }
+  const length = parseBars(bars) * beatsPerBar();
+  if (!Number.isFinite(length) || length <= 0) {
+    return;
+  }
+  const created = track.call("create_midi_clip", marker, length);
+  const id = liveId(created);
+  if (!id) {
+    return;
+  }
+  songView.path = "live_set view";
+  if (!songView.id || songView.id == 0) {
+    return;
+  }
+  songView.set("detail_clip", "id", id);
+}
 
 // src/actions/devices.ts
 var SCROLL_PAGES = 16;
 var SCROLL_RIGHT = 3;
 var appView = new LiveAPI();
-var songView = new LiveAPI();
-var track = new LiveAPI();
+var songView2 = new LiveAPI();
+var track2 = new LiveAPI();
 var device = new LiveAPI();
 var parent = new LiveAPI();
 var param = new LiveAPI();
@@ -175,7 +243,7 @@ function liveValue2(raw) {
   }
   return raw;
 }
-function liveId(raw) {
+function liveId2(raw) {
   const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
   for (const item of items) {
     if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
@@ -189,13 +257,13 @@ function liveId(raw) {
   return 0;
 }
 function currentChain() {
-  track.path = "live_set view selected_track";
-  if (!track.id || track.id == 0) {
+  track2.path = "live_set view selected_track";
+  if (!track2.id || track2.id == 0) {
     return null;
   }
-  device.path = track.path + " view selected_device";
+  device.path = track2.path + " view selected_device";
   if (device.id && device.id != 0) {
-    const id = liveId(device.get("canonical_parent"));
+    const id = liveId2(device.get("canonical_parent"));
     if (id) {
       parent.id = id;
       if (parent.type === "Chain" || parent.type === "DrumChain") {
@@ -203,7 +271,7 @@ function currentChain() {
       }
     }
   }
-  return track;
+  return track2;
 }
 function findInstrumentIndex(chain) {
   const n = chain.getcount("devices");
@@ -227,15 +295,15 @@ function selectInserted(chain, index, scrollEnd) {
   const id = device.id;
   appView.path = "live_app view";
   appView.call("focus_view", "Detail/DeviceChain");
-  songView.path = "live_set view";
-  songView.call("select_device", "id", id);
+  songView2.path = "live_set view";
+  songView2.call("select_device", "id", id);
   if (!scrollEnd) {
     return;
   }
   for (let i = 0; i < SCROLL_PAGES; i++) {
     appView.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
   }
-  songView.call("select_device", "id", id);
+  songView2.call("select_device", "id", id);
 }
 function insertAtChainEnd(name) {
   const chain = currentChain();
@@ -712,6 +780,7 @@ var BINDINGS = {
     { key: "sol", bind: "sol" },
     { key: "unsol", bind: "unsol" },
     { key: "loc", bind: "loc", str: true },
+    { key: "clip", bind: "clip", int: true },
     { key: "=", bind: "volup", int: true },
     { key: "-", bind: "voldown", int: true },
     { key: "low", bind: "low" },
@@ -750,11 +819,11 @@ function liveInts(raw) {
   return out;
 }
 function getDetailMidiClip() {
-  const songView3 = liveApi("live_set view");
-  if (!songView3.id || songView3.id == 0) {
+  const songView4 = liveApi("live_set view");
+  if (!songView4.id || songView4.id == 0) {
     return null;
   }
-  if (songView3.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
   detailClip2.path = "live_set view detail_clip";
@@ -766,8 +835,8 @@ function getDetailMidiClip() {
   }
   return detailClip2;
 }
-function gridStepBeats(clip) {
-  const clipView = liveApi(clip.path + " view");
+function gridStepBeats(clip2) {
+  const clipView = liveApi(clip2.path + " view");
   if (!clipView.id || clipView.id == 0) {
     return 1;
   }
@@ -778,8 +847,8 @@ function gridStepBeats(clip) {
   }
   return beats;
 }
-function selectedNotes(clip) {
-  const raw = clip.call("get_selected_notes_extended");
+function selectedNotes(clip2) {
+  const raw = clip2.call("get_selected_notes_extended");
   if (!raw) {
     return [];
   }
@@ -862,15 +931,15 @@ function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
   }
   return pitches;
 }
-function clipScale(clip) {
-  const tonic = Number(liveValue3(clip.get("root_note")));
+function clipScale(clip2) {
+  const tonic = Number(liveValue3(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
-  const intervals = liveInts(clip.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
+  const intervals = liveInts(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName(String(liveValue3(clip.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName(String(liveValue3(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -899,13 +968,13 @@ function selectedNoteIds(notes) {
   }
   return ids;
 }
-function replaceSelectedNotes(clip, selected, notes) {
+function replaceSelectedNotes(clip2, selected, notes) {
   const ids = selectedNoteIds(selected);
   if (ids.length) {
-    clip.call("remove_notes_by_id", ids);
+    clip2.call("remove_notes_by_id", ids);
   }
   if (notes.length) {
-    clip.call("add_new_notes", { notes });
+    clip2.call("add_new_notes", { notes });
   }
 }
 function nearestPitchInterval(pitch, otherPitches) {
@@ -986,37 +1055,37 @@ function arpeggiateGroups(groups, direction, stepBeats) {
   return notes;
 }
 function rewriteSelected(pitchesFromRoot) {
-  const clip = getDetailMidiClip();
-  if (!clip) {
+  const clip2 = getDetailMidiClip();
+  if (!clip2) {
     return;
   }
-  const roots = selectedNotes(clip);
+  const roots = selectedNotes(clip2);
   if (roots.length === 0) {
     return;
   }
-  const duration = gridStepBeats(clip);
+  const duration = gridStepBeats(clip2);
   const ids = [];
   const notes = [];
   for (const root of roots) {
     if (root.note_id !== void 0) {
       ids.push(root.note_id);
     }
-    for (const pitch of pitchesFromRoot(root, clip)) {
+    for (const pitch of pitchesFromRoot(root, clip2)) {
       pushTone(notes, root, pitch, duration);
     }
   }
   if (ids.length) {
-    clip.call("remove_notes_by_id", ids);
+    clip2.call("remove_notes_by_id", ids);
   }
-  clip.call("add_new_notes", { notes });
+  clip2.call("add_new_notes", { notes });
 }
 function fixedChord(quality) {
   const intervals = FIXED_CHORDS[quality];
   rewriteSelected((root) => intervals.map((interval) => root.pitch + interval));
 }
 function scaleChord(toneCount) {
-  rewriteSelected((root, clip) => {
-    const scale = clipScale(clip);
+  rewriteSelected((root, clip2) => {
+    const scale = clipScale(clip2);
     if (!scale) {
       return diatonicPitches(root.pitch, 0, [], toneCount);
     }
@@ -1078,11 +1147,11 @@ function aug9() {
   fixedChord("aug9");
 }
 function lead() {
-  const clip = getDetailMidiClip();
-  if (!clip) {
+  const clip2 = getDetailMidiClip();
+  if (!clip2) {
     return;
   }
-  const selected = selectedNotes(clip);
+  const selected = selectedNotes(clip2);
   if (selected.length === 0) {
     return;
   }
@@ -1094,26 +1163,26 @@ function lead() {
   if (notes.length === 0) {
     return;
   }
-  replaceSelectedNotes(clip, selected, notes);
+  replaceSelectedNotes(clip2, selected, notes);
 }
 function arpeggiateSelected(direction) {
-  const clip = getDetailMidiClip();
-  if (!clip) {
+  const clip2 = getDetailMidiClip();
+  if (!clip2) {
     return;
   }
-  const selected = selectedNotes(clip);
+  const selected = selectedNotes(clip2);
   if (selected.length === 0) {
     return;
   }
   const notes = arpeggiateGroups(
     groupSelectedByStartTime(selected),
     direction,
-    gridStepBeats(clip)
+    gridStepBeats(clip2)
   );
   if (notes.length === 0) {
     return;
   }
-  replaceSelectedNotes(clip, selected, notes);
+  replaceSelectedNotes(clip2, selected, notes);
 }
 function up() {
   arpeggiateSelected("up");
@@ -1150,11 +1219,11 @@ function liveInts2(raw) {
   return out;
 }
 function getDetailMidiClip2() {
-  const songView3 = liveApi2("live_set view");
-  if (!songView3.id || songView3.id == 0) {
+  const songView4 = liveApi2("live_set view");
+  if (!songView4.id || songView4.id == 0) {
     return null;
   }
-  if (songView3.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
   detailClip3.path = "live_set view detail_clip";
@@ -1173,23 +1242,23 @@ function parseNotes(raw) {
   const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
   return parsed && parsed.notes ? parsed.notes : [];
 }
-function selectedNotes2(clip) {
-  return parseNotes(clip.call("get_selected_notes_extended"));
+function selectedNotes2(clip2) {
+  return parseNotes(clip2.call("get_selected_notes_extended"));
 }
 function applySelected(update) {
-  const clip = getDetailMidiClip2();
-  if (!clip) {
+  const clip2 = getDetailMidiClip2();
+  if (!clip2) {
     return;
   }
-  const selected = selectedNotes2(clip);
+  const selected = selectedNotes2(clip2);
   if (selected.length === 0) {
     return;
   }
-  const notes = update(selected, clip);
+  const notes = update(selected, clip2);
   if (notes.length === 0) {
     return;
   }
-  clip.call("apply_note_modifications", { notes });
+  clip2.call("apply_note_modifications", { notes });
 }
 function scaleDuration(notes, factor) {
   const out = [];
@@ -1216,15 +1285,15 @@ function scaleIntervalsForName2(name) {
 function pitchClass2(pitch) {
   return (pitch % 12 + 12) % 12;
 }
-function clipScale2(clip) {
-  const tonic = Number(liveValue4(clip.get("root_note")));
+function clipScale2(clip2) {
+  const tonic = Number(liveValue4(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
-  const intervals = liveInts2(clip.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
+  const intervals = liveInts2(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName2(String(liveValue4(clip.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName2(String(liveValue4(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1257,8 +1326,8 @@ function nearestScalePitch(pitch, pcs) {
   }
   return pitch;
 }
-function fitNotes(notes, clip) {
-  const scale = clipScale2(clip);
+function fitNotes(notes, clip2) {
+  const scale = clipScale2(clip2);
   if (!scale) {
     return [];
   }
@@ -1354,8 +1423,8 @@ function invertScale(notes, scale) {
   }
   return out;
 }
-function invertNotes(notes, clip) {
-  const scale = clipScale2(clip);
+function invertNotes(notes, clip2) {
+  const scale = clipScale2(clip2);
   if (!scale) {
     return invertChromatic(notes);
   }
@@ -1496,9 +1565,9 @@ var SCROLL_PAGES2 = 16;
 var SCROLL_LEFT = 2;
 var SCROLL_RIGHT2 = 3;
 var appView2 = new LiveAPI();
-var songView2 = new LiveAPI();
+var songView3 = new LiveAPI();
 var song3 = new LiveAPI();
-var track2 = new LiveAPI();
+var track3 = new LiveAPI();
 var device2 = new LiveAPI();
 var parent2 = new LiveAPI();
 var thisDev = new LiveAPI();
@@ -1509,7 +1578,7 @@ function liveValue6(raw) {
   }
   return raw;
 }
-function liveId2(raw) {
+function liveId3(raw) {
   const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
   for (const item of items) {
     if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
@@ -1523,13 +1592,13 @@ function liveId2(raw) {
   return 0;
 }
 function currentChain2() {
-  track2.path = "live_set view selected_track";
-  if (!track2.id || track2.id == 0) {
+  track3.path = "live_set view selected_track";
+  if (!track3.id || track3.id == 0) {
     return null;
   }
-  device2.path = track2.path + " view selected_device";
+  device2.path = track3.path + " view selected_device";
   if (device2.id && device2.id != 0) {
-    const id = liveId2(device2.get("canonical_parent"));
+    const id = liveId3(device2.get("canonical_parent"));
     if (id) {
       parent2.id = id;
       if (parent2.type === "Chain") {
@@ -1537,7 +1606,7 @@ function currentChain2() {
       }
     }
   }
-  return track2;
+  return track3;
 }
 function selectChainEnd(which) {
   const chain = currentChain2();
@@ -1556,13 +1625,13 @@ function selectChainEnd(which) {
   const id = device2.id;
   appView2.path = "live_app view";
   appView2.call("focus_view", "Detail/DeviceChain");
-  songView2.path = "live_set view";
-  songView2.call("select_device", "id", id);
+  songView3.path = "live_set view";
+  songView3.call("select_device", "id", id);
   const dir = which === 0 ? SCROLL_LEFT : SCROLL_RIGHT2;
   for (let i = 0; i < SCROLL_PAGES2; i++) {
     appView2.call("scroll_view", dir, "Detail/DeviceChain", 0);
   }
-  songView2.call("select_device", "id", id);
+  songView3.call("select_device", "id", id);
 }
 function setChainCollapsed(collapsed) {
   const chain = currentChain2();
@@ -1617,8 +1686,8 @@ function moveSelected(delta) {
     return;
   }
   song3.call("move_device", "id", selectedId, "id", chain.id, drop);
-  songView2.path = "live_set view";
-  songView2.call("select_device", "id", selectedId);
+  songView3.path = "live_set view";
+  songView3.call("select_device", "id", selectedId);
 }
 function chainLeft() {
   moveSelected(-1);
@@ -1684,6 +1753,7 @@ void loadbang;
 void bang;
 void cliploop;
 void loc;
+void clip;
 void volup;
 void voldown;
 void chord;

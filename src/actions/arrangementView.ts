@@ -1,16 +1,53 @@
 import type { LiveClip } from '../sharedTypes';
 
 const CUE_EPS = 0.01;
+const DEFAULT_BARS = 4;
+const BEATS_PER_QUARTER = 4;
 
 const detailClip = new LiveAPI() as unknown as LiveClip;
 const song = new LiveAPI() as unknown as LiveClip;
 const cue = new LiveAPI() as unknown as LiveClip;
+const track = new LiveAPI() as unknown as LiveClip;
+const songView = new LiveAPI() as unknown as LiveClip;
 
 function liveValue(raw: unknown) {
   if (raw instanceof Array) {
     return raw[0];
   }
   return raw;
+}
+
+function liveId(raw: unknown) {
+  const items = raw instanceof Array ? raw : raw == null || raw === '' ? [] : [raw];
+  for (const item of items) {
+    if (typeof item === 'string' && item !== '' && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return 0;
+}
+
+function parseBars(raw: unknown) {
+  if (raw == null || raw === '') {
+    return DEFAULT_BARS;
+  }
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) {
+    return DEFAULT_BARS;
+  }
+  return n;
+}
+
+function beatsPerBar() {
+  const num = Number(liveValue(song.get('signature_numerator')));
+  const den = Number(liveValue(song.get('signature_denominator')));
+  const numerator = Number.isFinite(num) && num > 0 ? num : 4;
+  const denominator = Number.isFinite(den) && den > 0 ? den : 4;
+  return numerator * (BEATS_PER_QUARTER / denominator);
 }
 
 function getDetailClip() {
@@ -80,4 +117,39 @@ export function loc(name?: unknown) {
   if (created) {
     created.set('name', label);
   }
+}
+
+export function clip(bars?: unknown) {
+  song.path = 'live_set';
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  track.path = 'live_set view selected_track';
+  if (!track.id || track.id == 0) {
+    return;
+  }
+  if (liveValue(track.get('has_midi_input')) != 1) {
+    return;
+  }
+  if (liveValue(track.get('is_frozen')) == 1) {
+    return;
+  }
+  const marker = Number(liveValue(song.get('start_time')));
+  if (!Number.isFinite(marker) || marker < 0) {
+    return;
+  }
+  const length = parseBars(bars) * beatsPerBar();
+  if (!Number.isFinite(length) || length <= 0) {
+    return;
+  }
+  const created = track.call('create_midi_clip', marker, length);
+  const id = liveId(created);
+  if (!id) {
+    return;
+  }
+  songView.path = 'live_set view';
+  if (!songView.id || songView.id == 0) {
+    return;
+  }
+  songView.set('detail_clip', 'id', id);
 }

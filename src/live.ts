@@ -1,4 +1,4 @@
-import { cliploop, loc } from './actions/arrangementView';
+import { clip, cliploop, loc } from './actions/arrangementView';
 import { BINDINGS } from './bindings';
 import {
   aug,
@@ -119,6 +119,7 @@ void loadbang;
 void bang;
 void cliploop;
 void loc;
+void clip;
 void volup;
 void voldown;
 void chord;
