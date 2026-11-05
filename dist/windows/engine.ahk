@@ -40,11 +40,15 @@ for arg in A_Args {
 
 if FileExist(CMD_PATH) {
     cmd := Trim(StrSplit(FileRead(CMD_PATH, "UTF-8"), "`n", "`r")[1])
-    try {
-        FileDelete(CMD_PATH)
-    }
     if cmd = "quit" {
+        try {
+            FileDelete(CMD_PATH)
+        }
         doQuit := true
+    } else if cmd = "" {
+        try {
+            FileDelete(CMD_PATH)
+        }
     }
 }
 
@@ -138,6 +142,16 @@ if hsBinds.Count {
     } catch as err {
         bad.Push("Escape (" err.Message ")")
     }
+    try {
+        Hotkey("Enter", HsCommit)
+    } catch as err {
+        bad.Push("Enter (" err.Message ")")
+    }
+    try {
+        Hotkey("NumpadEnter", HsCommit)
+    } catch as err {
+        bad.Push("NumpadEnter (" err.Message ")")
+    }
 }
 HotIf
 
@@ -159,7 +173,15 @@ WatchCmd() {
     try {
         FileDelete(CMD_PATH)
     }
-    switch cmd {
+    parts := StrSplit(cmd, A_Space, " `t")
+    if parts.Length = 0 {
+        return
+    }
+    switch parts[1] {
+        case "idle":
+            if parts.Length >= 2 {
+                SetHsIdle(parts[2])
+            }
         case "suspend":
             StopHotstring()
             Suspend True
@@ -183,6 +205,30 @@ WatchCmd() {
             return
     }
     UpdateTip()
+}
+
+SetHsIdle(ms) {
+    global HS_IDLE_MS, HS_COMMIT_MS, capturing
+    try {
+        n := Integer(ms)
+    } catch {
+        return
+    }
+    if n < 200 {
+        n := 200
+    }
+    if n > 10000 {
+        n := 10000
+    }
+    HS_IDLE_MS := n
+    commit := Integer(n * 0.2)
+    if commit < 50 {
+        commit := 50
+    }
+    HS_COMMIT_MS := commit
+    if capturing {
+        SetTimer HsIdle, -HS_IDLE_MS
+    }
 }
 
 UpdateTip() {
@@ -271,6 +317,13 @@ StopHotstring() {
     capturing := false
     hsBuffer := ""
     SetTimer HsIdle, 0
+}
+
+HsCommit(*) {
+    global hsBuffer
+    if MatchHs(hsBuffer) {
+        FireHs()
+    }
 }
 
 HsIdle(*) {

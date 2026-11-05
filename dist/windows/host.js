@@ -4,6 +4,7 @@ inlets = 1;
 outlets = 0;
 var enginePath = "";
 var shuttingDown = false;
+var idleMs = 2e3;
 function hostThis() {
   return globalThis;
 }
@@ -21,6 +22,7 @@ function binds(...parts) {
   }
   writeText(joinPath(parentDir(enginePath), "engine-cmd.txt"), "");
   launchEngine();
+  writeIdleCommand();
 }
 function closebang() {
   quit();
@@ -51,6 +53,13 @@ function hud(n) {
     return;
   }
   writeCommand("hudon");
+}
+function idle(ms) {
+  idleMs = Math.min(1e4, Math.max(200, Math.round(Number(ms))));
+  writeIdleCommand();
+}
+function writeIdleCommand() {
+  writeCommand(`idle ${idleMs}`);
 }
 function writeCommand(cmd) {
   if (!ensureEnginePath()) {
@@ -132,3 +141,4 @@ void quit;
 void suspend;
 void resume;
 void hud;
+void idle;

@@ -10,6 +10,7 @@ type HostJsThis = {
 
 let enginePath = '';
 let shuttingDown = false;
+let idleMs = 2000;
 
 function hostThis() {
   return globalThis as unknown as HostJsThis;
@@ -30,6 +31,7 @@ function binds(...parts: unknown[]) {
   // Neutralize a leftover quit so a new launch does not exit immediately.
   writeText(joinPath(parentDir(enginePath), 'engine-cmd.txt'), '');
   launchEngine();
+  writeIdleCommand();
 }
 
 function closebang() {
@@ -66,6 +68,15 @@ function hud(n: number) {
     return;
   }
   writeCommand('hudon');
+}
+
+function idle(ms: number) {
+  idleMs = Math.min(10000, Math.max(200, Math.round(Number(ms))));
+  writeIdleCommand();
+}
+
+function writeIdleCommand() {
+  writeCommand(`idle ${idleMs}`);
 }
 
 function writeCommand(cmd: string) {
@@ -156,3 +167,4 @@ void quit;
 void suspend;
 void resume;
 void hud;
+void idle;
