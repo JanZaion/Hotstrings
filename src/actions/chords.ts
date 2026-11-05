@@ -136,6 +136,12 @@ function pitchAbove(from: number, pc: number) {
 }
 
 function majorFamily(toneCount: number) {
+  if (toneCount >= 7) {
+    return MAJOR_FAMILY[7];
+  }
+  if (toneCount >= 6) {
+    return MAJOR_FAMILY[6];
+  }
   if (toneCount >= 5) {
     return MAJOR_FAMILY[5];
   }
@@ -160,7 +166,7 @@ function diatonicPitches(
   if (degree === -1) {
     return fallback.map(interval => rootPitch + interval);
   }
-  const count = Math.max(1, Math.min(5, toneCount));
+  const count = Math.max(1, Math.min(7, toneCount));
   const pitches: number[] = [];
   let prev = rootPitch;
   for (let i = 0; i < count; i++) {
@@ -357,6 +363,14 @@ export function chord9() {
   scaleChord(5);
 }
 
+export function chord11() {
+  scaleChord(6);
+}
+
+export function chord13() {
+  scaleChord(7);
+}
+
 export function major() {
   fixedChord('major');
 }
@@ -415,6 +429,22 @@ export function dim9() {
 
 export function aug9() {
   fixedChord('aug9');
+}
+
+export function major11() {
+  fixedChord('major11');
+}
+
+export function minor11() {
+  fixedChord('minor11');
+}
+
+export function major13() {
+  fixedChord('major13');
+}
+
+export function minor13() {
+  fixedChord('minor13');
 }
 
 export function lead() {

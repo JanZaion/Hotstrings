@@ -14,12 +14,18 @@ export const FIXED_CHORDS = {
   minor9: [0, 3, 7, 10, 14],
   dim9: [0, 3, 6, 9, 14],
   aug9: [0, 4, 8, 10, 14],
+  major11: [0, 4, 7, 11, 14, 17],
+  minor11: [0, 3, 7, 10, 14, 17],
+  major13: [0, 4, 7, 11, 14, 17, 21],
+  minor13: [0, 3, 7, 10, 14, 17, 21],
 } as const;
 
 export const MAJOR_FAMILY = {
   3: FIXED_CHORDS.major,
   4: FIXED_CHORDS.major7,
   5: FIXED_CHORDS.major9,
+  6: FIXED_CHORDS.major11,
+  7: FIXED_CHORDS.major13,
 } as const;
 
 export const GRID_BEATS: Record<number, number> = {

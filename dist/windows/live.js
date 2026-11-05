@@ -143,6 +143,155 @@ function clip(bars) {
   songView.set("detail_clip", "id", id);
 }
 
+// src/actions/bass.ts
+var BASS_C1 = 36;
+var BASS_VELOCITY = 100;
+var SIXTEENTH = 0.25;
+var BASS5_CYCLE = 2;
+var BASS5_HITS = [
+  { offset: 0, duration: 0.5 },
+  { offset: 0.5, duration: SIXTEENTH },
+  { offset: 1.25, duration: 0.5 }
+];
+var BASS6_CYCLE = 2;
+var BASS6_HITS = [
+  { offset: 0, duration: 0.75 },
+  { offset: 0.75, duration: 0.75 },
+  { offset: 1.5, duration: 0.5 }
+];
+var live = new LiveAPI();
+var detailClip2 = new LiveAPI();
+function liveApi(path) {
+  live.path = path;
+  return live;
+}
+function liveValue2(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function getDetailMidiClip() {
+  const songView4 = liveApi("live_set view");
+  if (!songView4.id || songView4.id == 0) {
+    return null;
+  }
+  if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
+    return null;
+  }
+  detailClip2.path = "live_set view detail_clip";
+  if (!detailClip2.id || detailClip2.id == 0) {
+    return null;
+  }
+  if (liveValue2(detailClip2.get("is_midi_clip")) != 1) {
+    return null;
+  }
+  return detailClip2;
+}
+function loopRange(clip2) {
+  const start = Number(liveValue2(clip2.get("loop_start")));
+  const end = Number(liveValue2(clip2.get("loop_end")));
+  if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+    return { start, end };
+  }
+  const length = Number(liveValue2(clip2.get("length")));
+  if (Number.isFinite(length) && length > 0) {
+    return { start: 0, end: length };
+  }
+  return null;
+}
+function bassPitch(clip2) {
+  const tonic = Number(liveValue2(clip2.get("root_note")));
+  const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
+  return BASS_C1 + tonicPc;
+}
+function pushHit(notes, pitch, start, duration, end) {
+  if (start >= end) {
+    return;
+  }
+  const noteDuration = Math.min(duration, end - start);
+  if (noteDuration <= 0) {
+    return;
+  }
+  notes.push({
+    pitch,
+    start_time: start,
+    duration: noteDuration,
+    velocity: BASS_VELOCITY
+  });
+}
+function writeBassNotes(clip2, notes, range) {
+  clip2.call("remove_notes_extended", {
+    from_pitch: 0,
+    pitch_span: 128,
+    from_time: range.start,
+    time_span: range.end - range.start
+  });
+  if (notes.length) {
+    clip2.call("add_new_notes", { notes });
+  }
+}
+function writeBass(step, duration, firstOffset) {
+  const clip2 = getDetailMidiClip();
+  if (!clip2) {
+    return;
+  }
+  const range = loopRange(clip2);
+  if (!range) {
+    return;
+  }
+  const pitch = bassPitch(clip2);
+  if (pitch < 0 || pitch > 127) {
+    return;
+  }
+  const notes = [];
+  let t = range.start + firstOffset;
+  while (t < range.end) {
+    pushHit(notes, pitch, t, duration, range.end);
+    t += step;
+  }
+  writeBassNotes(clip2, notes, range);
+}
+function writeBassPattern(cycle, hits) {
+  const clip2 = getDetailMidiClip();
+  if (!clip2) {
+    return;
+  }
+  const range = loopRange(clip2);
+  if (!range) {
+    return;
+  }
+  const pitch = bassPitch(clip2);
+  if (pitch < 0 || pitch > 127) {
+    return;
+  }
+  const notes = [];
+  for (let cycleStart = range.start; cycleStart < range.end; cycleStart += cycle) {
+    for (const hit of hits) {
+      pushHit(notes, pitch, cycleStart + hit.offset, hit.duration, range.end);
+    }
+  }
+  writeBassNotes(clip2, notes, range);
+}
+function bass1() {
+  writeBass(1, 1, 0);
+}
+function bass2() {
+  writeBass(0.5, 0.5, 0);
+}
+function bass3() {
+  writeBass(2 / 3, 2 / 3, 0);
+}
+function bass4() {
+  writeBass(0.5, SIXTEENTH, SIXTEENTH);
+}
+function bass5() {
+  writeBassPattern(BASS5_CYCLE, BASS5_HITS);
+}
+function bass6() {
+  writeBassPattern(BASS6_CYCLE, BASS6_HITS);
+}
+
 // src/actions/devices.ts
 var SCROLL_PAGES = 16;
 var SCROLL_RIGHT = 3;
@@ -237,7 +386,7 @@ var INSTRUMENT_NAMES = /* @__PURE__ */ new Set([
   NATIVE_DEVICES.ten,
   NATIVE_DEVICES.wav
 ]);
-function liveValue2(raw) {
+function liveValue3(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -280,7 +429,7 @@ function findInstrumentIndex(chain) {
     if (!device.id || device.id == 0) {
       continue;
     }
-    const kind = liveValue2(device.get("type"));
+    const kind = liveValue3(device.get("type"));
     if (kind == INSTRUMENT_TYPE || kind === "instrument") {
       return i;
     }
@@ -441,7 +590,7 @@ function eq8ParamPaths() {
     if (!param.id || param.id == 0) {
       continue;
     }
-    const name = liveValue2(param.get("name"));
+    const name = liveValue3(param.get("name"));
     if (typeof name === "string" && name !== "") {
       paths[name] = param.path;
     }
@@ -459,8 +608,8 @@ function setEq8Param(path, value) {
   param.set("value", value);
 }
 function hzToEq8Value(hz) {
-  const min = Number(liveValue2(param.get("min")));
-  const max = Number(liveValue2(param.get("max")));
+  const min = Number(liveValue3(param.get("min")));
+  const max = Number(liveValue3(param.get("max")));
   if (Number.isFinite(min) && Number.isFinite(max) && max > 1.5) {
     return Math.max(min, Math.min(max, hz));
   }
@@ -641,12 +790,18 @@ var FIXED_CHORDS = {
   major9: [0, 4, 7, 11, 14],
   minor9: [0, 3, 7, 10, 14],
   dim9: [0, 3, 6, 9, 14],
-  aug9: [0, 4, 8, 10, 14]
+  aug9: [0, 4, 8, 10, 14],
+  major11: [0, 4, 7, 11, 14, 17],
+  minor11: [0, 3, 7, 10, 14, 17],
+  major13: [0, 4, 7, 11, 14, 17, 21],
+  minor13: [0, 3, 7, 10, 14, 17, 21]
 };
 var MAJOR_FAMILY = {
   3: FIXED_CHORDS.major,
   4: FIXED_CHORDS.major7,
-  5: FIXED_CHORDS.major9
+  5: FIXED_CHORDS.major9,
+  6: FIXED_CHORDS.major11,
+  7: FIXED_CHORDS.major13
 };
 var GRID_BEATS = {
   0: 1,
@@ -764,6 +919,14 @@ var BINDINGS = {
     { key: "chord", bind: "chord" },
     { key: "chord7", bind: "chord7" },
     { key: "chord9", bind: "chord9" },
+    { key: "chord11", bind: "chord11" },
+    { key: "chord13", bind: "chord13" },
+    { key: "bass1", bind: "bass1" },
+    { key: "bass2", bind: "bass2" },
+    { key: "bass3", bind: "bass3" },
+    { key: "bass4", bind: "bass4" },
+    { key: "bass5", bind: "bass5" },
+    { key: "bass6", bind: "bass6" },
     ...Object.keys(FIXED_CHORDS).map((key) => ({ key, bind: key })),
     { key: "lead", bind: "lead" },
     { key: "up", bind: "up" },
@@ -792,13 +955,13 @@ var BINDINGS = {
 };
 
 // src/actions/chords.ts
-var live = new LiveAPI();
-var detailClip2 = new LiveAPI();
-function liveApi(path) {
-  live.path = path;
-  return live;
+var live2 = new LiveAPI();
+var detailClip3 = new LiveAPI();
+function liveApi2(path) {
+  live2.path = path;
+  return live2;
 }
-function liveValue3(raw) {
+function liveValue4(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -818,31 +981,31 @@ function liveInts(raw) {
   }
   return out;
 }
-function getDetailMidiClip() {
-  const songView4 = liveApi("live_set view");
+function getDetailMidiClip2() {
+  const songView4 = liveApi2("live_set view");
   if (!songView4.id || songView4.id == 0) {
     return null;
   }
   if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  detailClip2.path = "live_set view detail_clip";
-  if (!detailClip2.id || detailClip2.id == 0) {
+  detailClip3.path = "live_set view detail_clip";
+  if (!detailClip3.id || detailClip3.id == 0) {
     return null;
   }
-  if (liveValue3(detailClip2.get("is_midi_clip")) != 1) {
+  if (liveValue4(detailClip3.get("is_midi_clip")) != 1) {
     return null;
   }
-  return detailClip2;
+  return detailClip3;
 }
 function gridStepBeats(clip2) {
-  const clipView = liveApi(clip2.path + " view");
+  const clipView = liveApi2(clip2.path + " view");
   if (!clipView.id || clipView.id == 0) {
     return 1;
   }
-  const grid = Number(liveValue3(clipView.get("grid_quantization")));
+  const grid = Number(liveValue4(clipView.get("grid_quantization")));
   const beats = GRID_BEATS[grid] ?? 1;
-  if (liveValue3(clipView.get("grid_is_triplet")) == 1) {
+  if (liveValue4(clipView.get("grid_is_triplet")) == 1) {
     return beats * (2 / 3);
   }
   return beats;
@@ -902,6 +1065,12 @@ function pitchAbove(from, pc) {
   return pitch;
 }
 function majorFamily(toneCount) {
+  if (toneCount >= 7) {
+    return MAJOR_FAMILY[7];
+  }
+  if (toneCount >= 6) {
+    return MAJOR_FAMILY[6];
+  }
   if (toneCount >= 5) {
     return MAJOR_FAMILY[5];
   }
@@ -920,7 +1089,7 @@ function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
   if (degree === -1) {
     return fallback.map((interval) => rootPitch + interval);
   }
-  const count = Math.max(1, Math.min(5, toneCount));
+  const count = Math.max(1, Math.min(7, toneCount));
   const pitches = [];
   let prev = rootPitch;
   for (let i = 0; i < count; i++) {
@@ -932,14 +1101,14 @@ function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
   return pitches;
 }
 function clipScale(clip2) {
-  const tonic = Number(liveValue3(clip2.get("root_note")));
+  const tonic = Number(liveValue4(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName(String(liveValue3(clip2.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName(String(liveValue4(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1055,7 +1224,7 @@ function arpeggiateGroups(groups, direction, stepBeats) {
   return notes;
 }
 function rewriteSelected(pitchesFromRoot) {
-  const clip2 = getDetailMidiClip();
+  const clip2 = getDetailMidiClip2();
   if (!clip2) {
     return;
   }
@@ -1100,6 +1269,12 @@ function chord7() {
 }
 function chord9() {
   scaleChord(5);
+}
+function chord11() {
+  scaleChord(6);
+}
+function chord13() {
+  scaleChord(7);
 }
 function major() {
   fixedChord("major");
@@ -1146,8 +1321,20 @@ function dim9() {
 function aug9() {
   fixedChord("aug9");
 }
+function major11() {
+  fixedChord("major11");
+}
+function minor11() {
+  fixedChord("minor11");
+}
+function major13() {
+  fixedChord("major13");
+}
+function minor13() {
+  fixedChord("minor13");
+}
 function lead() {
-  const clip2 = getDetailMidiClip();
+  const clip2 = getDetailMidiClip2();
   if (!clip2) {
     return;
   }
@@ -1166,7 +1353,7 @@ function lead() {
   replaceSelectedNotes(clip2, selected, notes);
 }
 function arpeggiateSelected(direction) {
-  const clip2 = getDetailMidiClip();
+  const clip2 = getDetailMidiClip2();
   if (!clip2) {
     return;
   }
@@ -1192,13 +1379,13 @@ function down() {
 }
 
 // src/actions/midiClip.ts
-var live2 = new LiveAPI();
-var detailClip3 = new LiveAPI();
-function liveApi2(path) {
-  live2.path = path;
-  return live2;
+var live3 = new LiveAPI();
+var detailClip4 = new LiveAPI();
+function liveApi3(path) {
+  live3.path = path;
+  return live3;
 }
-function liveValue4(raw) {
+function liveValue5(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1218,22 +1405,22 @@ function liveInts2(raw) {
   }
   return out;
 }
-function getDetailMidiClip2() {
-  const songView4 = liveApi2("live_set view");
+function getDetailMidiClip3() {
+  const songView4 = liveApi3("live_set view");
   if (!songView4.id || songView4.id == 0) {
     return null;
   }
   if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  detailClip3.path = "live_set view detail_clip";
-  if (!detailClip3.id || detailClip3.id == 0) {
+  detailClip4.path = "live_set view detail_clip";
+  if (!detailClip4.id || detailClip4.id == 0) {
     return null;
   }
-  if (liveValue4(detailClip3.get("is_midi_clip")) != 1) {
+  if (liveValue5(detailClip4.get("is_midi_clip")) != 1) {
     return null;
   }
-  return detailClip3;
+  return detailClip4;
 }
 function parseNotes(raw) {
   if (!raw) {
@@ -1246,7 +1433,7 @@ function selectedNotes2(clip2) {
   return parseNotes(clip2.call("get_selected_notes_extended"));
 }
 function applySelected(update) {
-  const clip2 = getDetailMidiClip2();
+  const clip2 = getDetailMidiClip3();
   if (!clip2) {
     return;
   }
@@ -1286,14 +1473,14 @@ function pitchClass2(pitch) {
   return (pitch % 12 + 12) % 12;
 }
 function clipScale2(clip2) {
-  const tonic = Number(liveValue4(clip2.get("root_note")));
+  const tonic = Number(liveValue5(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts2(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName2(String(liveValue4(clip2.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName2(String(liveValue5(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1484,7 +1671,7 @@ var LOW_BETA = 118.426374;
 var LOW_GAMMA = 7504 / 5567;
 var song2 = new LiveAPI();
 var volume = new LiveAPI();
-function liveValue5(raw) {
+function liveValue6(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1542,12 +1729,12 @@ function bumpTrack(trackNumber, deltaDb) {
   if (!volume.id || volume.id == 0) {
     return;
   }
-  const current = Number(liveValue5(volume.get("value")));
+  const current = Number(liveValue6(volume.get("value")));
   if (!Number.isFinite(current)) {
     return;
   }
-  const min = Number(liveValue5(volume.get("min")));
-  const max = Number(liveValue5(volume.get("max")));
+  const min = Number(liveValue6(volume.get("min")));
+  const max = Number(liveValue6(volume.get("max")));
   const lo = Number.isFinite(min) ? min : 0;
   const hi = Number.isFinite(max) ? max : 1;
   const next = dbToLive(liveToDb(current) + deltaDb);
@@ -1572,7 +1759,7 @@ var device2 = new LiveAPI();
 var parent2 = new LiveAPI();
 var thisDev = new LiveAPI();
 var param2 = new LiveAPI();
-function liveValue6(raw) {
+function liveValue7(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1716,7 +1903,7 @@ function applyChainEffects(onFor) {
     if (!device2.id || device2.id == 0 || device2.id == selfId) {
       continue;
     }
-    const kind = Number(liveValue6(device2.get("type")));
+    const kind = Number(liveValue7(device2.get("type")));
     if (kind != 2 && kind != 4) {
       continue;
     }
@@ -1759,6 +1946,14 @@ void voldown;
 void chord;
 void chord7;
 void chord9;
+void chord11;
+void chord13;
+void bass1;
+void bass2;
+void bass3;
+void bass4;
+void bass5;
+void bass6;
 void major;
 void minor;
 void sus2;
@@ -1774,6 +1969,10 @@ void major9;
 void minor9;
 void dim9;
 void aug9;
+void major11;
+void minor11;
+void major13;
+void minor13;
 void lead;
 void up;
 void down;

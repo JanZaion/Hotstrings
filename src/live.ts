@@ -1,4 +1,5 @@
 import { clip, cliploop, loc } from './actions/arrangementView';
+import { bass1, bass2, bass3, bass4, bass5, bass6 } from './actions/bass';
 import { BINDINGS } from './bindings';
 import {
   aug,
@@ -7,6 +8,8 @@ import {
   chord,
   chord7,
   chord9,
+  chord11,
+  chord13,
   dim,
   dim7,
   dim9,
@@ -15,9 +18,13 @@ import {
   major,
   major7,
   major9,
+  major11,
+  major13,
   minor,
   minor7,
   minor9,
+  minor11,
+  minor13,
   pow,
   sus2,
   sus4,
@@ -125,6 +132,14 @@ void voldown;
 void chord;
 void chord7;
 void chord9;
+void chord11;
+void chord13;
+void bass1;
+void bass2;
+void bass3;
+void bass4;
+void bass5;
+void bass6;
 void major;
 void minor;
 void sus2;
@@ -140,6 +155,10 @@ void major9;
 void minor9;
 void dim9;
 void aug9;
+void major11;
+void minor11;
+void major13;
+void minor13;
 void lead;
 void up;
 void down;
