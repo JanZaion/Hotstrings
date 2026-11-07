@@ -47,6 +47,7 @@ export const BINDINGS: Bindings = {
     { key: 'high', bind: 'high' },
     { key: 'notch', bind: 'notch' },
     { key: 'band', bind: 'band' },
+    { key: 'eq', bind: 'eq8' },
     ...Object.keys(NATIVE_DEVICES).map(key => ({ key, bind: key })),
   ],
 };
