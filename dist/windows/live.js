@@ -94,6 +94,7 @@ var song2 = new LiveAPI();
 var cue = new LiveAPI();
 var track = new LiveAPI();
 var songView2 = new LiveAPI();
+var appView = new LiveAPI();
 function liveValue2(raw) {
   if (raw instanceof Array) {
     return raw[0];
@@ -228,6 +229,108 @@ function clip(bars) {
     return;
   }
   songView2.set("detail_clip", "id", id);
+}
+function closeClipView() {
+  songView2.path = "live_set view";
+  if (!songView2.id || songView2.id == 0) {
+    return;
+  }
+  if (songView2.call("is_view_visible", "Detail/Clip") != 1) {
+    return;
+  }
+  appView.path = "live_app view";
+  if (!appView.id || appView.id == 0) {
+    return;
+  }
+  appView.call("hide_view", "Detail");
+}
+function findChildIndex(selectedId, child) {
+  const n = song2.getcount(child);
+  for (let i = 0; i < n; i++) {
+    track.path = "live_set " + child + " " + i;
+    if (track.id == selectedId) {
+      return i;
+    }
+  }
+  return -1;
+}
+function groupEndIndex(index) {
+  const n = song2.getcount("tracks");
+  let i = index + 1;
+  while (i < n) {
+    track.path = "live_set tracks " + i;
+    if (liveValue2(track.get("is_grouped")) != 1) {
+      break;
+    }
+    i += 1;
+  }
+  return i - 1;
+}
+function insertIndexAfter(index) {
+  track.path = "live_set tracks " + index;
+  if (liveValue2(track.get("is_foldable")) == 1) {
+    return groupEndIndex(index) + 1;
+  }
+  return index + 1;
+}
+function stripDevices() {
+  while (true) {
+    const n = track.getcount("devices");
+    if (n < 1) {
+      return;
+    }
+    try {
+      track.call("delete_device", 0);
+    } catch {
+      return;
+    }
+    const next = track.getcount("devices");
+    if (next >= n) {
+      return;
+    }
+  }
+}
+function bare() {
+  song2.path = "live_set";
+  if (!song2.id || song2.id == 0) {
+    return;
+  }
+  track.path = "live_set view selected_track";
+  if (!track.id || track.id == 0) {
+    return;
+  }
+  const selectedId = track.id;
+  closeClipView();
+  let child = "tracks";
+  let index = findChildIndex(selectedId, "tracks");
+  if (index < 0) {
+    index = findChildIndex(selectedId, "return_tracks");
+    if (index < 0) {
+      return;
+    }
+    child = "return_tracks";
+  }
+  const insertAt = child === "tracks" ? insertIndexAfter(index) : index + 1;
+  try {
+    if (child === "return_tracks") {
+      song2.call("duplicate_return_track", index);
+    } else {
+      song2.call("duplicate_track", index);
+    }
+  } catch {
+    return;
+  }
+  track.path = "live_set " + child + " " + insertAt;
+  if (!track.id || track.id == 0) {
+    return;
+  }
+  const newId = track.id;
+  songView2.path = "live_set view";
+  if (songView2.id && songView2.id != 0) {
+    songView2.set("selected_track", "id", newId);
+  }
+  track.path = "live_set " + child + " " + insertAt;
+  stripDevices();
 }
 
 // src/actions/bass.ts
@@ -382,7 +485,7 @@ function bass6() {
 // src/actions/devices.ts
 var SCROLL_PAGES = 16;
 var SCROLL_RIGHT = 3;
-var appView = new LiveAPI();
+var appView2 = new LiveAPI();
 var songView3 = new LiveAPI();
 var track2 = new LiveAPI();
 var device = new LiveAPI();
@@ -529,15 +632,15 @@ function selectInserted(chain, index, scrollEnd) {
     return;
   }
   const id = device.id;
-  appView.path = "live_app view";
-  appView.call("focus_view", "Detail/DeviceChain");
+  appView2.path = "live_app view";
+  appView2.call("focus_view", "Detail/DeviceChain");
   songView3.path = "live_set view";
   songView3.call("select_device", "id", id);
   if (!scrollEnd) {
     return;
   }
   for (let i = 0; i < SCROLL_PAGES; i++) {
-    appView.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
+    appView2.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
   }
   songView3.call("select_device", "id", id);
 }
@@ -1019,6 +1122,7 @@ var BINDINGS = {
     { key: "lead", bind: "lead" },
     { key: "up", bind: "up" },
     { key: "down", bind: "down" },
+    { key: "dearp", bind: "dearp" },
     { key: "doub", bind: "doub" },
     { key: "half", bind: "half" },
     { key: "fit", bind: "fit" },
@@ -1032,8 +1136,10 @@ var BINDINGS = {
     { key: "unsol", bind: "unsol" },
     { key: "loc", bind: "loc", str: true },
     { key: "clip", bind: "clip", int: true },
+    { key: "bare", bind: "bare" },
     { key: "=", bind: "volup", int: true },
     { key: "-", bind: "voldown", int: true },
+    { key: "headroom", bind: "headroom" },
     { key: "low", bind: "low" },
     { key: "high", bind: "high" },
     { key: "notch", bind: "notch" },
@@ -1320,10 +1426,13 @@ function rewriteSelected(pitchesFromRoot) {
   if (roots.length === 0) {
     return;
   }
-  const duration = gridStepBeats(clip2);
   const ids = [];
   const notes = [];
   for (const root of roots) {
+    const duration = root.duration;
+    if (duration === void 0 || !Number.isFinite(duration) || duration <= 0) {
+      continue;
+    }
     if (root.note_id !== void 0) {
       ids.push(root.note_id);
     }
@@ -1334,7 +1443,9 @@ function rewriteSelected(pitchesFromRoot) {
   if (ids.length) {
     clip2.call("remove_notes_by_id", ids);
   }
-  clip2.call("add_new_notes", { notes });
+  if (notes.length) {
+    clip2.call("add_new_notes", { notes });
+  }
 }
 function fixedChord(quality) {
   const intervals = FIXED_CHORDS[quality];
@@ -1464,6 +1575,39 @@ function up() {
 }
 function down() {
   arpeggiateSelected("down");
+}
+function dearp() {
+  const clip2 = getDetailMidiClip3();
+  if (!clip2) {
+    return;
+  }
+  const selected = selectedNotes(clip2);
+  if (selected.length === 0) {
+    return;
+  }
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+  for (const note of selected) {
+    if (note.start_time < minStart) {
+      minStart = note.start_time;
+    }
+    const end = note.start_time + (note.duration ?? 0);
+    if (end > maxEnd) {
+      maxEnd = end;
+    }
+  }
+  const duration = maxEnd - minStart;
+  if (!Number.isFinite(minStart) || !Number.isFinite(duration) || duration <= 0) {
+    return;
+  }
+  const notes = [];
+  for (const note of selected) {
+    pushTone(notes, note, note.pitch, duration, minStart);
+  }
+  if (notes.length === 0) {
+    return;
+  }
+  replaceSelectedNotes(clip2, selected, notes);
 }
 
 // src/actions/midiClip.ts
@@ -1758,6 +1902,7 @@ var LOW_ALPHA = 70;
 var LOW_BETA = 118.426374;
 var LOW_GAMMA = 7504 / 5567;
 var song3 = new LiveAPI();
+var track3 = new LiveAPI();
 var volume = new LiveAPI();
 function liveValue7(raw) {
   if (raw instanceof Array) {
@@ -1800,20 +1945,8 @@ function dbToLive(db) {
   }
   return Math.pow((db + LOW_ALPHA) / LOW_BETA, LOW_GAMMA);
 }
-function bumpTrack(trackNumber, deltaDb) {
-  const n = parseTrackNumber(trackNumber);
-  if (n < 1) {
-    return;
-  }
-  song3.path = "live_set";
-  if (!song3.id || song3.id == 0) {
-    return;
-  }
-  const count = song3.getcount("tracks");
-  if (n > count) {
-    return;
-  }
-  volume.path = "live_set tracks " + (n - 1) + " mixer_device volume";
+function bumpVolume(path, deltaDb) {
+  volume.path = path;
   if (!volume.id || volume.id == 0) {
     return;
   }
@@ -1828,21 +1961,53 @@ function bumpTrack(trackNumber, deltaDb) {
   const next = dbToLive(liveToDb(current) + deltaDb);
   volume.set("value", Math.max(lo, Math.min(hi, next)));
 }
+function bumpTrack(trackNumber, deltaDb) {
+  const n = parseTrackNumber(trackNumber);
+  if (n < 1) {
+    return;
+  }
+  song3.path = "live_set";
+  if (!song3.id || song3.id == 0) {
+    return;
+  }
+  const count = song3.getcount("tracks");
+  if (n > count) {
+    return;
+  }
+  bumpVolume("live_set tracks " + (n - 1) + " mixer_device volume", deltaDb);
+}
 function volup(trackNumber) {
   bumpTrack(trackNumber, STEP_DB);
 }
 function voldown(trackNumber) {
   bumpTrack(trackNumber, -STEP_DB);
 }
+function headroom() {
+  song3.path = "live_set";
+  if (!song3.id || song3.id == 0) {
+    return;
+  }
+  const count = song3.getcount("tracks");
+  for (let i = 0; i < count; i++) {
+    track3.path = "live_set tracks " + i;
+    if (!track3.id || track3.id == 0) {
+      continue;
+    }
+    if (liveValue7(track3.get("is_foldable")) == 1) {
+      continue;
+    }
+    bumpVolume(track3.path + " mixer_device volume", -STEP_DB);
+  }
+}
 
 // src/actions/rack.ts
 var SCROLL_PAGES2 = 16;
 var SCROLL_LEFT = 2;
 var SCROLL_RIGHT2 = 3;
-var appView2 = new LiveAPI();
+var appView3 = new LiveAPI();
 var songView4 = new LiveAPI();
 var song4 = new LiveAPI();
-var track3 = new LiveAPI();
+var track4 = new LiveAPI();
 var device2 = new LiveAPI();
 var parent2 = new LiveAPI();
 var thisDev = new LiveAPI();
@@ -1867,11 +2032,11 @@ function liveId3(raw) {
   return 0;
 }
 function currentChain2() {
-  track3.path = "live_set view selected_track";
-  if (!track3.id || track3.id == 0) {
+  track4.path = "live_set view selected_track";
+  if (!track4.id || track4.id == 0) {
     return null;
   }
-  device2.path = track3.path + " view selected_device";
+  device2.path = track4.path + " view selected_device";
   if (device2.id && device2.id != 0) {
     const id = liveId3(device2.get("canonical_parent"));
     if (id) {
@@ -1881,7 +2046,7 @@ function currentChain2() {
       }
     }
   }
-  return track3;
+  return track4;
 }
 function selectChainEnd(which) {
   const chain = currentChain2();
@@ -1898,13 +2063,13 @@ function selectChainEnd(which) {
     return;
   }
   const id = device2.id;
-  appView2.path = "live_app view";
-  appView2.call("focus_view", "Detail/DeviceChain");
+  appView3.path = "live_app view";
+  appView3.call("focus_view", "Detail/DeviceChain");
   songView4.path = "live_set view";
   songView4.call("select_device", "id", id);
   const dir = which === 0 ? SCROLL_LEFT : SCROLL_RIGHT2;
   for (let i = 0; i < SCROLL_PAGES2; i++) {
-    appView2.call("scroll_view", dir, "Detail/DeviceChain", 0);
+    appView3.call("scroll_view", dir, "Detail/DeviceChain", 0);
   }
   songView4.call("select_device", "id", id);
 }
@@ -2029,9 +2194,11 @@ void bang;
 void cliploop;
 void loc;
 void clip;
+void bare;
 void playFrom;
 void volup;
 void voldown;
+void headroom;
 void chord;
 void chord7;
 void chord9;
@@ -2065,6 +2232,7 @@ void minor13;
 void lead;
 void up;
 void down;
+void dearp;
 void doub;
 void half;
 void fit;

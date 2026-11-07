@@ -319,10 +319,13 @@ function rewriteSelected(pitchesFromRoot: (root: MidiNote, clip: LiveClip) => nu
   if (roots.length === 0) {
     return;
   }
-  const duration = gridStepBeats(clip);
   const ids: number[] = [];
   const notes: NoteSpec[] = [];
   for (const root of roots) {
+    const duration = root.duration;
+    if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
+      continue;
+    }
     if (root.note_id !== undefined) {
       ids.push(root.note_id);
     }
@@ -333,7 +336,9 @@ function rewriteSelected(pitchesFromRoot: (root: MidiNote, clip: LiveClip) => nu
   if (ids.length) {
     clip.call('remove_notes_by_id', ids);
   }
-  clip.call('add_new_notes', { notes });
+  if (notes.length) {
+    clip.call('add_new_notes', { notes });
+  }
 }
 
 function fixedChord(quality: FixedQuality) {
@@ -493,4 +498,38 @@ export function up() {
 
 export function down() {
   arpeggiateSelected('down');
+}
+
+export function dearp() {
+  const clip = getDetailMidiClip();
+  if (!clip) {
+    return;
+  }
+  const selected = selectedNotes(clip);
+  if (selected.length === 0) {
+    return;
+  }
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+  for (const note of selected) {
+    if (note.start_time < minStart) {
+      minStart = note.start_time;
+    }
+    const end = note.start_time + (note.duration ?? 0);
+    if (end > maxEnd) {
+      maxEnd = end;
+    }
+  }
+  const duration = maxEnd - minStart;
+  if (!Number.isFinite(minStart) || !Number.isFinite(duration) || duration <= 0) {
+    return;
+  }
+  const notes: NoteSpec[] = [];
+  for (const note of selected) {
+    pushTone(notes, note, note.pitch, duration, minStart);
+  }
+  if (notes.length === 0) {
+    return;
+  }
+  replaceSelectedNotes(clip, selected, notes);
 }

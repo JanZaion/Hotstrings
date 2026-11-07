@@ -16,6 +16,7 @@ const LOW_BETA = 118.426374;
 const LOW_GAMMA = 7504 / 5567;
 
 const song = new LiveAPI() as unknown as LiveClip;
+const track = new LiveAPI() as unknown as LiveClip;
 const volume = new LiveAPI() as unknown as LiveClip;
 
 function liveValue(raw: unknown) {
@@ -63,20 +64,8 @@ function dbToLive(db: number) {
   return Math.pow((db + LOW_ALPHA) / LOW_BETA, LOW_GAMMA);
 }
 
-function bumpTrack(trackNumber: unknown, deltaDb: number) {
-  const n = parseTrackNumber(trackNumber);
-  if (n < 1) {
-    return;
-  }
-  song.path = 'live_set';
-  if (!song.id || song.id == 0) {
-    return;
-  }
-  const count = song.getcount('tracks');
-  if (n > count) {
-    return;
-  }
-  volume.path = 'live_set tracks ' + (n - 1) + ' mixer_device volume';
+function bumpVolume(path: string, deltaDb: number) {
+  volume.path = path;
   if (!volume.id || volume.id == 0) {
     return;
   }
@@ -92,10 +81,44 @@ function bumpTrack(trackNumber: unknown, deltaDb: number) {
   volume.set('value', Math.max(lo, Math.min(hi, next)));
 }
 
+function bumpTrack(trackNumber: unknown, deltaDb: number) {
+  const n = parseTrackNumber(trackNumber);
+  if (n < 1) {
+    return;
+  }
+  song.path = 'live_set';
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  const count = song.getcount('tracks');
+  if (n > count) {
+    return;
+  }
+  bumpVolume('live_set tracks ' + (n - 1) + ' mixer_device volume', deltaDb);
+}
+
 export function volup(trackNumber: unknown) {
   bumpTrack(trackNumber, STEP_DB);
 }
 
 export function voldown(trackNumber: unknown) {
   bumpTrack(trackNumber, -STEP_DB);
+}
+
+export function headroom() {
+  song.path = 'live_set';
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  const count = song.getcount('tracks');
+  for (let i = 0; i < count; i++) {
+    track.path = 'live_set tracks ' + i;
+    if (!track.id || track.id == 0) {
+      continue;
+    }
+    if (liveValue(track.get('is_foldable')) == 1) {
+      continue;
+    }
+    bumpVolume(track.path + ' mixer_device volume', -STEP_DB);
+  }
 }

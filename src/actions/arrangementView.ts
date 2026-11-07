@@ -9,6 +9,7 @@ const song = new LiveAPI() as unknown as LiveClip;
 const cue = new LiveAPI() as unknown as LiveClip;
 const track = new LiveAPI() as unknown as LiveClip;
 const songView = new LiveAPI() as unknown as LiveClip;
+const appView = new LiveAPI() as unknown as LiveClip;
 
 function liveValue(raw: unknown) {
   if (raw instanceof Array) {
@@ -152,4 +153,112 @@ export function clip(bars?: unknown) {
     return;
   }
   songView.set('detail_clip', 'id', id);
+}
+
+function closeClipView() {
+  songView.path = 'live_set view';
+  if (!songView.id || songView.id == 0) {
+    return;
+  }
+  if (songView.call('is_view_visible', 'Detail/Clip') != 1) {
+    return;
+  }
+  appView.path = 'live_app view';
+  if (!appView.id || appView.id == 0) {
+    return;
+  }
+  appView.call('hide_view', 'Detail');
+}
+
+function findChildIndex(selectedId: number, child: 'tracks' | 'return_tracks') {
+  const n = song.getcount(child);
+  for (let i = 0; i < n; i++) {
+    track.path = 'live_set ' + child + ' ' + i;
+    if (track.id == selectedId) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function groupEndIndex(index: number) {
+  const n = song.getcount('tracks');
+  let i = index + 1;
+  while (i < n) {
+    track.path = 'live_set tracks ' + i;
+    if (liveValue(track.get('is_grouped')) != 1) {
+      break;
+    }
+    i += 1;
+  }
+  return i - 1;
+}
+
+function insertIndexAfter(index: number) {
+  track.path = 'live_set tracks ' + index;
+  if (liveValue(track.get('is_foldable')) == 1) {
+    return groupEndIndex(index) + 1;
+  }
+  return index + 1;
+}
+
+function stripDevices() {
+  while (true) {
+    const n = track.getcount('devices');
+    if (n < 1) {
+      return;
+    }
+    try {
+      track.call('delete_device', 0);
+    } catch {
+      return;
+    }
+    const next = track.getcount('devices');
+    if (next >= n) {
+      return;
+    }
+  }
+}
+
+export function bare() {
+  song.path = 'live_set';
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  track.path = 'live_set view selected_track';
+  if (!track.id || track.id == 0) {
+    return;
+  }
+  const selectedId = track.id;
+  closeClipView();
+  let child: 'tracks' | 'return_tracks' = 'tracks';
+  let index = findChildIndex(selectedId, 'tracks');
+  if (index < 0) {
+    index = findChildIndex(selectedId, 'return_tracks');
+    if (index < 0) {
+      return;
+    }
+    child = 'return_tracks';
+  }
+  const insertAt = child === 'tracks' ? insertIndexAfter(index) : index + 1;
+  try {
+    if (child === 'return_tracks') {
+      song.call('duplicate_return_track', index);
+    } else {
+      song.call('duplicate_track', index);
+    }
+  } catch {
+    return;
+  }
+  track.path = 'live_set ' + child + ' ' + insertAt;
+  if (!track.id || track.id == 0) {
+    return;
+  }
+  const newId = track.id;
+  songView.path = 'live_set view';
+  if (songView.id && songView.id != 0) {
+    songView.set('selected_track', 'id', newId);
+  }
+  track.path = 'live_set ' + child + ' ' + insertAt;
+  stripDevices();
 }

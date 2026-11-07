@@ -8,17 +8,9 @@
 6. add mac support
 7. check proper load order when mounting the patch
 
-hotstring edits:
-
-- Chords should not use grid, they should just use the length of that given note!!
-- ;dearp - create chord out of notes. all have earliest start time and latest end time
-- ;headroom - lower all channels by 3db
-- ;something - duplicate track, but without rack
-
 Add advanced options and there:
 
 - alternative playback toggle
 - hud toggle
 - hotstring initiator picker
-- custom file regen + debug console
 - add hotstring list (maybe to jsui)

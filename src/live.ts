@@ -1,5 +1,5 @@
 import { playFrom } from './actions/alternativePlayback';
-import { clip, cliploop, loc } from './actions/arrangementView';
+import { bare, clip, cliploop, loc } from './actions/arrangementView';
 import { bass1, bass2, bass3, bass4, bass5, bass6 } from './actions/bass';
 import { BINDINGS } from './bindings';
 import {
@@ -11,6 +11,7 @@ import {
   chord9,
   chord11,
   chord13,
+  dearp,
   dim,
   dim7,
   dim9,
@@ -104,7 +105,7 @@ import {
   wav,
 } from './actions/devices';
 import { doub, fit, half, inv, rev } from './actions/midiClip';
-import { volup, voldown } from './actions/mixer';
+import { headroom, volup, voldown } from './actions/mixer';
 import { chainLeft, chainRight, col, exp, first, last, sol, unsol } from './actions/rack';
 
 autowatch = 1;
@@ -128,9 +129,11 @@ void bang;
 void cliploop;
 void loc;
 void clip;
+void bare;
 void playFrom;
 void volup;
 void voldown;
+void headroom;
 void chord;
 void chord7;
 void chord9;
@@ -164,6 +167,7 @@ void minor13;
 void lead;
 void up;
 void down;
+void dearp;
 void doub;
 void half;
 void fit;
