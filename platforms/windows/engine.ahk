@@ -16,10 +16,12 @@ HS_COMMIT_MS := 400
 CMD_PATH := A_ScriptDir "\engine-cmd.txt"
 KEYS_PATH := A_ScriptDir "\bindings.json"
 HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789=-"
+HS_INITIATORS := [";", "/", "CapsLock"]
 
 hsBinds := Map()
 hsBuffer := ""
 capturing := false
+hsInitiator := ";"
 hudEnabled := true
 playFromKey := ""
 hud := 0
@@ -123,10 +125,15 @@ for entry in hotkeys {
 }
 HotIf LiveFocused
 if hsBinds.Count {
-    try {
-        Hotkey(";", BeginHotstring)
-    } catch as err {
-        bad.Push("; (" err.Message ")")
+    for key in HS_INITIATORS {
+        try {
+            Hotkey(key, BeginHotstring)
+            if key != hsInitiator {
+                Hotkey(key, "Off")
+            }
+        } catch as err {
+            bad.Push(key " (" err.Message ")")
+        }
     }
 }
 HotIf CapturingLive
@@ -207,12 +214,56 @@ ApplyCmd(cmd) {
             SetPlayFromEnabled(true)
         case "playfromoff":
             SetPlayFromEnabled(false)
+        case "initiator":
+            if parts.Length >= 2 {
+                SetHsInitiator(parts[2])
+            }
         case "quit":
             try {
                 FileDelete(KEYS_PATH)
             }
             ExitApp
     }
+}
+
+NormalizeHsInitiator(key) {
+    global HS_INITIATORS
+    k := String(key)
+    if StrLower(k) = "capslock" {
+        k := "CapsLock"
+    }
+    for allowed in HS_INITIATORS {
+        if k = allowed {
+            return allowed
+        }
+    }
+    return ""
+}
+
+SetHsInitiator(key) {
+    global hsInitiator, hsBinds
+    next := NormalizeHsInitiator(key)
+    if next = "" || next = hsInitiator {
+        return
+    }
+    StopHotstring()
+    if !hsBinds.Count {
+        hsInitiator := next
+        return
+    }
+    HotIf LiveFocused
+    try {
+        Hotkey(hsInitiator, "Off")
+    }
+    try {
+        Hotkey(next, "On")
+        hsInitiator := next
+    } catch {
+        try {
+            Hotkey(hsInitiator, "On")
+        }
+    }
+    HotIf
 }
 
 SetHsIdle(ms) {
@@ -330,7 +381,10 @@ RegisterHsChar(char) {
 }
 
 BeginHotstring(*) {
-    global capturing, hsBuffer
+    global capturing, hsBuffer, hsInitiator
+    if StrLower(hsInitiator) = "capslock" {
+        SetCapsLockState("Off")
+    }
     capturing := true
     hsBuffer := ""
     HudShow()

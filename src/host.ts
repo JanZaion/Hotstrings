@@ -8,10 +8,13 @@ type HostJsThis = {
   };
 };
 
+const INITIATORS = [';', '/', 'CapsLock'];
+
 let enginePath = '';
 let shuttingDown = false;
 let idleMs = 4000;
 let playFromOff = false;
+let initiatorIndex = 0;
 
 function hostThis() {
   return globalThis as unknown as HostJsThis;
@@ -81,12 +84,18 @@ function playfrom(n: number) {
   writeCommand(playFromOff ? 'playfromoff' : 'playfromon');
 }
 
+function initiator(n: number) {
+  const last = INITIATORS.length - 1;
+  initiatorIndex = Math.min(last, Math.max(0, Math.round(Number(n)) || 0));
+  writeCommand(`initiator ${INITIATORS[initiatorIndex]}`);
+}
+
 function writeIdleCommand() {
   writeCommand(`idle ${idleMs}`);
 }
 
 function writeLaunchCommands() {
-  const lines = [`idle ${idleMs}`];
+  const lines = [`idle ${idleMs}`, `initiator ${INITIATORS[initiatorIndex]}`];
   if (playFromOff) {
     lines.push('playfromoff');
   }
@@ -183,3 +192,4 @@ void resume;
 void hud;
 void idle;
 void playfrom;
+void initiator;

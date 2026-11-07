@@ -2,10 +2,12 @@
 autowatch = 1;
 inlets = 1;
 outlets = 0;
+var INITIATORS = [";", "/", "CapsLock"];
 var enginePath = "";
 var shuttingDown = false;
 var idleMs = 4e3;
 var playFromOff = false;
+var initiatorIndex = 0;
 function hostThis() {
   return globalThis;
 }
@@ -63,11 +65,16 @@ function playfrom(n) {
   playFromOff = n === 0;
   writeCommand(playFromOff ? "playfromoff" : "playfromon");
 }
+function initiator(n) {
+  const last = INITIATORS.length - 1;
+  initiatorIndex = Math.min(last, Math.max(0, Math.round(Number(n)) || 0));
+  writeCommand(`initiator ${INITIATORS[initiatorIndex]}`);
+}
 function writeIdleCommand() {
   writeCommand(`idle ${idleMs}`);
 }
 function writeLaunchCommands() {
-  const lines = [`idle ${idleMs}`];
+  const lines = [`idle ${idleMs}`, `initiator ${INITIATORS[initiatorIndex]}`];
   if (playFromOff) {
     lines.push("playfromoff");
   }
@@ -155,3 +162,4 @@ void resume;
 void hud;
 void idle;
 void playfrom;
+void initiator;

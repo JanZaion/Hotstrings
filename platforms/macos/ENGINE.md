@@ -18,7 +18,7 @@ The Max host writes `bindings.json` next to the engine, then opens the engine fi
 ## Files next to the engine
 
 - `bindings.json` — hotkeys and hotstrings from `src/live.ts`
-- `engine-cmd.txt` — `suspend`, `resume`, `hudon`, `hudoff`, `playfromon`, `playfromoff`, `idle <ms>`, or `quit`. Multiple commands may be stacked as separate lines.
+- `engine-cmd.txt` — `suspend`, `resume`, `hudon`, `hudoff`, `playfromon`, `playfromoff`, `idle <ms>`, `initiator <key>`, or `quit`. Multiple commands may be stacked as separate lines. `initiator` keys: `;`, `/`, `CapsLock`. Default `;`.
 
 ## OSC
 
