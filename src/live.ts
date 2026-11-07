@@ -1,5 +1,5 @@
 import { playFrom } from './actions/alternativePlayback';
-import { bare, clip, cliploop, loc } from './actions/arrangementView';
+import { clip, cliploop, loc } from './actions/arrangementView';
 import { bass1, bass2, bass3, bass4, bass5, bass6 } from './actions/bass';
 import { BINDINGS } from './bindings';
 import {
@@ -129,7 +129,6 @@ void bang;
 void cliploop;
 void loc;
 void clip;
-void bare;
 void playFrom;
 void volup;
 void voldown;

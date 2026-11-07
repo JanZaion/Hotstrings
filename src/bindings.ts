@@ -39,7 +39,6 @@ export const BINDINGS: Bindings = {
     { key: 'unsol', bind: 'unsol' },
     { key: 'loc', bind: 'loc', str: true },
     { key: 'clip', bind: 'clip', int: true },
-    { key: 'bare', bind: 'bare' },
     { key: '=', bind: 'volup', int: true },
     { key: '-', bind: 'voldown', int: true },
     { key: 'headroom', bind: 'headroom' },
