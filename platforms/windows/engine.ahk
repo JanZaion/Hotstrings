@@ -11,7 +11,7 @@
 
 HOST := "127.0.0.1"
 PORT := 7400
-HS_IDLE_MS := 2000
+HS_IDLE_MS := 4000
 HS_COMMIT_MS := 400
 CMD_PATH := A_ScriptDir "\engine-cmd.txt"
 KEYS_PATH := A_ScriptDir "\bindings.json"
@@ -225,8 +225,8 @@ SetHsIdle(ms) {
     if n < 200 {
         n := 200
     }
-    if n > 10000 {
-        n := 10000
+    if n > 12000 {
+        n := 12000
     }
     HS_IDLE_MS := n
     commit := Integer(n * 0.2)

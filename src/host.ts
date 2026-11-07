@@ -10,7 +10,7 @@ type HostJsThis = {
 
 let enginePath = '';
 let shuttingDown = false;
-let idleMs = 2000;
+let idleMs = 4000;
 let playFromOff = false;
 
 function hostThis() {
@@ -72,7 +72,7 @@ function hud(n: number) {
 }
 
 function idle(ms: number) {
-  idleMs = Math.min(10000, Math.max(200, Math.round(Number(ms))));
+  idleMs = Math.min(12000, Math.max(200, Math.round(Number(ms))));
   writeIdleCommand();
 }
 

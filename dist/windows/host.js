@@ -4,7 +4,7 @@ inlets = 1;
 outlets = 0;
 var enginePath = "";
 var shuttingDown = false;
-var idleMs = 2e3;
+var idleMs = 4e3;
 var playFromOff = false;
 function hostThis() {
   return globalThis;
@@ -56,7 +56,7 @@ function hud(n) {
   writeCommand("hudon");
 }
 function idle(ms) {
-  idleMs = Math.min(1e4, Math.max(200, Math.round(Number(ms))));
+  idleMs = Math.min(12e3, Math.max(200, Math.round(Number(ms))));
   writeIdleCommand();
 }
 function playfrom(n) {
