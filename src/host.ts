@@ -11,6 +11,7 @@ type HostJsThis = {
 let enginePath = '';
 let shuttingDown = false;
 let idleMs = 2000;
+let playFromOff = false;
 
 function hostThis() {
   return globalThis as unknown as HostJsThis;
@@ -31,7 +32,7 @@ function binds(...parts: unknown[]) {
   // Neutralize a leftover quit so a new launch does not exit immediately.
   writeText(joinPath(parentDir(enginePath), 'engine-cmd.txt'), '');
   launchEngine();
-  writeIdleCommand();
+  writeLaunchCommands();
 }
 
 function closebang() {
@@ -75,8 +76,21 @@ function idle(ms: number) {
   writeIdleCommand();
 }
 
+function playfrom(n: number) {
+  playFromOff = n === 0;
+  writeCommand(playFromOff ? 'playfromoff' : 'playfromon');
+}
+
 function writeIdleCommand() {
   writeCommand(`idle ${idleMs}`);
+}
+
+function writeLaunchCommands() {
+  const lines = [`idle ${idleMs}`];
+  if (playFromOff) {
+    lines.push('playfromoff');
+  }
+  writeCommand(lines.join('\n'));
 }
 
 function writeCommand(cmd: string) {
@@ -168,3 +182,4 @@ void suspend;
 void resume;
 void hud;
 void idle;
+void playfrom;

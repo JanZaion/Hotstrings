@@ -5,6 +5,7 @@ outlets = 0;
 var enginePath = "";
 var shuttingDown = false;
 var idleMs = 2e3;
+var playFromOff = false;
 function hostThis() {
   return globalThis;
 }
@@ -22,7 +23,7 @@ function binds(...parts) {
   }
   writeText(joinPath(parentDir(enginePath), "engine-cmd.txt"), "");
   launchEngine();
-  writeIdleCommand();
+  writeLaunchCommands();
 }
 function closebang() {
   quit();
@@ -58,8 +59,19 @@ function idle(ms) {
   idleMs = Math.min(1e4, Math.max(200, Math.round(Number(ms))));
   writeIdleCommand();
 }
+function playfrom(n) {
+  playFromOff = n === 0;
+  writeCommand(playFromOff ? "playfromoff" : "playfromon");
+}
 function writeIdleCommand() {
   writeCommand(`idle ${idleMs}`);
+}
+function writeLaunchCommands() {
+  const lines = [`idle ${idleMs}`];
+  if (playFromOff) {
+    lines.push("playfromoff");
+  }
+  writeCommand(lines.join("\n"));
 }
 function writeCommand(cmd) {
   if (!ensureEnginePath()) {
@@ -142,3 +154,4 @@ void suspend;
 void resume;
 void hud;
 void idle;
+void playfrom;

@@ -1,13 +1,100 @@
+// src/actions/alternativePlayback.ts
+var song = new LiveAPI();
+var detailClip = new LiveAPI();
+var songView = new LiveAPI();
+function liveValue(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function parseNotes(raw) {
+  if (!raw) {
+    return [];
+  }
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  return parsed && parsed.notes ? parsed.notes : [];
+}
+function earliestNote(notes) {
+  let start = notes[0].start_time;
+  for (let i = 1; i < notes.length; i++) {
+    if (notes[i].start_time < start) {
+      start = notes[i].start_time;
+    }
+  }
+  return start;
+}
+function clipSongTime(clip2, clipTime) {
+  const clipStart = Number(liveValue(clip2.get("start_time")));
+  if (!Number.isFinite(clipStart) || clipStart < 0) {
+    return null;
+  }
+  const startMarker = Number(liveValue(clip2.get("start_marker")));
+  const marker = Number.isFinite(startMarker) ? startMarker : 0;
+  return clipStart + clipTime - marker;
+}
+function getDetailMidiClip() {
+  songView.path = "live_set view";
+  if (!songView.id || songView.id == 0) {
+    return null;
+  }
+  if (songView.call("is_view_visible", "Detail/Clip") != 1) {
+    return null;
+  }
+  detailClip.path = "live_set view detail_clip";
+  if (!detailClip.id || detailClip.id == 0) {
+    return null;
+  }
+  if (liveValue(detailClip.get("is_midi_clip")) != 1) {
+    return null;
+  }
+  return detailClip;
+}
+function songTime() {
+  const clip2 = getDetailMidiClip();
+  if (clip2) {
+    const notes = parseNotes(clip2.call("get_selected_notes_extended"));
+    if (notes.length > 0) {
+      const time = clipSongTime(clip2, earliestNote(notes));
+      if (time !== null) {
+        return time;
+      }
+    } else {
+      const clipStart = Number(liveValue(clip2.get("start_time")));
+      if (Number.isFinite(clipStart) && clipStart >= 0) {
+        return clipStart;
+      }
+    }
+  }
+  const start = Number(liveValue(song.get("start_time")));
+  return Number.isFinite(start) ? start : null;
+}
+function playFrom() {
+  song.path = "live_set";
+  if (!song.id || song.id == 0) {
+    return;
+  }
+  const start = songTime();
+  if (start !== null) {
+    song.set("start_time", start);
+  }
+  if (liveValue(song.get("is_playing")) == 1) {
+    song.call("stop_playing");
+    return;
+  }
+  song.call("start_playing");
+}
+
 // src/actions/arrangementView.ts
 var CUE_EPS = 0.01;
 var DEFAULT_BARS = 4;
 var BEATS_PER_QUARTER = 4;
-var detailClip = new LiveAPI();
-var song = new LiveAPI();
+var detailClip2 = new LiveAPI();
+var song2 = new LiveAPI();
 var cue = new LiveAPI();
 var track = new LiveAPI();
-var songView = new LiveAPI();
-function liveValue(raw) {
+var songView2 = new LiveAPI();
+function liveValue2(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -37,26 +124,26 @@ function parseBars(raw) {
   return n;
 }
 function beatsPerBar() {
-  const num = Number(liveValue(song.get("signature_numerator")));
-  const den = Number(liveValue(song.get("signature_denominator")));
+  const num = Number(liveValue2(song2.get("signature_numerator")));
+  const den = Number(liveValue2(song2.get("signature_denominator")));
   const numerator = Number.isFinite(num) && num > 0 ? num : 4;
   const denominator = Number.isFinite(den) && den > 0 ? den : 4;
   return numerator * (BEATS_PER_QUARTER / denominator);
 }
 function getDetailClip() {
-  detailClip.path = "live_set view detail_clip";
-  if (!detailClip.id || detailClip.id == 0) {
+  detailClip2.path = "live_set view detail_clip";
+  if (!detailClip2.id || detailClip2.id == 0) {
     return null;
   }
-  return detailClip;
+  return detailClip2;
 }
 function findCueAt(time) {
-  const n = song.getcount("cue_points");
+  const n = song2.getcount("cue_points");
   let bestIndex = -1;
   let bestDist = CUE_EPS;
   for (let i = 0; i < n; i++) {
     cue.path = "live_set cue_points " + i;
-    const t = Number(liveValue(cue.get("time")));
+    const t = Number(liveValue2(cue.get("time")));
     const d = Math.abs(t - time);
     if (d < bestDist) {
       bestDist = d;
@@ -77,11 +164,11 @@ function cliploop() {
   clip2.set("looping", 1);
 }
 function loc(name) {
-  song.path = "live_set";
-  if (!song.id || song.id == 0) {
+  song2.path = "live_set";
+  if (!song2.id || song2.id == 0) {
     return;
   }
-  const marker = Number(liveValue(song.get("start_time")));
+  const marker = Number(liveValue2(song2.get("start_time")));
   if (!Number.isFinite(marker)) {
     return;
   }
@@ -93,13 +180,13 @@ function loc(name) {
     }
     return;
   }
-  const playhead = Number(liveValue(song.get("current_song_time")));
-  song.set("current_song_time", marker);
-  song.call("set_or_delete_cue");
+  const playhead = Number(liveValue2(song2.get("current_song_time")));
+  song2.set("current_song_time", marker);
+  song2.call("set_or_delete_cue");
   if (Number.isFinite(playhead)) {
-    song.set("current_song_time", playhead);
+    song2.set("current_song_time", playhead);
   }
-  song.set("start_time", marker);
+  song2.set("start_time", marker);
   if (!label) {
     return;
   }
@@ -109,21 +196,21 @@ function loc(name) {
   }
 }
 function clip(bars) {
-  song.path = "live_set";
-  if (!song.id || song.id == 0) {
+  song2.path = "live_set";
+  if (!song2.id || song2.id == 0) {
     return;
   }
   track.path = "live_set view selected_track";
   if (!track.id || track.id == 0) {
     return;
   }
-  if (liveValue(track.get("has_midi_input")) != 1) {
+  if (liveValue2(track.get("has_midi_input")) != 1) {
     return;
   }
-  if (liveValue(track.get("is_frozen")) == 1) {
+  if (liveValue2(track.get("is_frozen")) == 1) {
     return;
   }
-  const marker = Number(liveValue(song.get("start_time")));
+  const marker = Number(liveValue2(song2.get("start_time")));
   if (!Number.isFinite(marker) || marker < 0) {
     return;
   }
@@ -136,11 +223,11 @@ function clip(bars) {
   if (!id) {
     return;
   }
-  songView.path = "live_set view";
-  if (!songView.id || songView.id == 0) {
+  songView2.path = "live_set view";
+  if (!songView2.id || songView2.id == 0) {
     return;
   }
-  songView.set("detail_clip", "id", id);
+  songView2.set("detail_clip", "id", id);
 }
 
 // src/actions/bass.ts
@@ -160,48 +247,48 @@ var BASS6_HITS = [
   { offset: 1.5, duration: 0.5 }
 ];
 var live = new LiveAPI();
-var detailClip2 = new LiveAPI();
+var detailClip3 = new LiveAPI();
 function liveApi(path) {
   live.path = path;
   return live;
 }
-function liveValue2(raw) {
+function liveValue3(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
   return raw;
 }
-function getDetailMidiClip() {
-  const songView4 = liveApi("live_set view");
-  if (!songView4.id || songView4.id == 0) {
+function getDetailMidiClip2() {
+  const songView5 = liveApi("live_set view");
+  if (!songView5.id || songView5.id == 0) {
     return null;
   }
-  if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView5.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  detailClip2.path = "live_set view detail_clip";
-  if (!detailClip2.id || detailClip2.id == 0) {
+  detailClip3.path = "live_set view detail_clip";
+  if (!detailClip3.id || detailClip3.id == 0) {
     return null;
   }
-  if (liveValue2(detailClip2.get("is_midi_clip")) != 1) {
+  if (liveValue3(detailClip3.get("is_midi_clip")) != 1) {
     return null;
   }
-  return detailClip2;
+  return detailClip3;
 }
 function loopRange(clip2) {
-  const start = Number(liveValue2(clip2.get("loop_start")));
-  const end = Number(liveValue2(clip2.get("loop_end")));
+  const start = Number(liveValue3(clip2.get("loop_start")));
+  const end = Number(liveValue3(clip2.get("loop_end")));
   if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
     return { start, end };
   }
-  const length = Number(liveValue2(clip2.get("length")));
+  const length = Number(liveValue3(clip2.get("length")));
   if (Number.isFinite(length) && length > 0) {
     return { start: 0, end: length };
   }
   return null;
 }
 function bassPitch(clip2) {
-  const tonic = Number(liveValue2(clip2.get("root_note")));
+  const tonic = Number(liveValue3(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   return BASS_C1 + tonicPc;
 }
@@ -232,7 +319,7 @@ function writeBassNotes(clip2, notes, range) {
   }
 }
 function writeBass(step, duration, firstOffset) {
-  const clip2 = getDetailMidiClip();
+  const clip2 = getDetailMidiClip2();
   if (!clip2) {
     return;
   }
@@ -253,7 +340,7 @@ function writeBass(step, duration, firstOffset) {
   writeBassNotes(clip2, notes, range);
 }
 function writeBassPattern(cycle, hits) {
-  const clip2 = getDetailMidiClip();
+  const clip2 = getDetailMidiClip2();
   if (!clip2) {
     return;
   }
@@ -296,7 +383,7 @@ function bass6() {
 var SCROLL_PAGES = 16;
 var SCROLL_RIGHT = 3;
 var appView = new LiveAPI();
-var songView2 = new LiveAPI();
+var songView3 = new LiveAPI();
 var track2 = new LiveAPI();
 var device = new LiveAPI();
 var parent = new LiveAPI();
@@ -386,7 +473,7 @@ var INSTRUMENT_NAMES = /* @__PURE__ */ new Set([
   NATIVE_DEVICES.ten,
   NATIVE_DEVICES.wav
 ]);
-function liveValue3(raw) {
+function liveValue4(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -429,7 +516,7 @@ function findInstrumentIndex(chain) {
     if (!device.id || device.id == 0) {
       continue;
     }
-    const kind = liveValue3(device.get("type"));
+    const kind = liveValue4(device.get("type"));
     if (kind == INSTRUMENT_TYPE || kind === "instrument") {
       return i;
     }
@@ -444,15 +531,15 @@ function selectInserted(chain, index, scrollEnd) {
   const id = device.id;
   appView.path = "live_app view";
   appView.call("focus_view", "Detail/DeviceChain");
-  songView2.path = "live_set view";
-  songView2.call("select_device", "id", id);
+  songView3.path = "live_set view";
+  songView3.call("select_device", "id", id);
   if (!scrollEnd) {
     return;
   }
   for (let i = 0; i < SCROLL_PAGES; i++) {
     appView.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
   }
-  songView2.call("select_device", "id", id);
+  songView3.call("select_device", "id", id);
 }
 function insertAtChainEnd(name) {
   const chain = currentChain();
@@ -590,7 +677,7 @@ function eq8ParamPaths() {
     if (!param.id || param.id == 0) {
       continue;
     }
-    const name = liveValue3(param.get("name"));
+    const name = liveValue4(param.get("name"));
     if (typeof name === "string" && name !== "") {
       paths[name] = param.path;
     }
@@ -608,8 +695,8 @@ function setEq8Param(path, value) {
   param.set("value", value);
 }
 function hzToEq8Value(hz) {
-  const min = Number(liveValue3(param.get("min")));
-  const max = Number(liveValue3(param.get("max")));
+  const min = Number(liveValue4(param.get("min")));
+  const max = Number(liveValue4(param.get("max")));
   if (Number.isFinite(min) && Number.isFinite(max) && max > 1.5) {
     return Math.max(min, Math.min(max, hz));
   }
@@ -912,6 +999,7 @@ var SCALE_ALIASES = {
 var BINDINGS = {
   hotkeys: [
     { key: "`", bind: "cliploop", keys: "^j" },
+    { key: "^Space", bind: "playFrom" },
     { key: "^!Left", bind: "chainLeft" },
     { key: "^!Right", bind: "chainRight" }
   ],
@@ -956,12 +1044,12 @@ var BINDINGS = {
 
 // src/actions/chords.ts
 var live2 = new LiveAPI();
-var detailClip3 = new LiveAPI();
+var detailClip4 = new LiveAPI();
 function liveApi2(path) {
   live2.path = path;
   return live2;
 }
-function liveValue4(raw) {
+function liveValue5(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -981,31 +1069,31 @@ function liveInts(raw) {
   }
   return out;
 }
-function getDetailMidiClip2() {
-  const songView4 = liveApi2("live_set view");
-  if (!songView4.id || songView4.id == 0) {
+function getDetailMidiClip3() {
+  const songView5 = liveApi2("live_set view");
+  if (!songView5.id || songView5.id == 0) {
     return null;
   }
-  if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView5.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  detailClip3.path = "live_set view detail_clip";
-  if (!detailClip3.id || detailClip3.id == 0) {
+  detailClip4.path = "live_set view detail_clip";
+  if (!detailClip4.id || detailClip4.id == 0) {
     return null;
   }
-  if (liveValue4(detailClip3.get("is_midi_clip")) != 1) {
+  if (liveValue5(detailClip4.get("is_midi_clip")) != 1) {
     return null;
   }
-  return detailClip3;
+  return detailClip4;
 }
 function gridStepBeats(clip2) {
   const clipView = liveApi2(clip2.path + " view");
   if (!clipView.id || clipView.id == 0) {
     return 1;
   }
-  const grid = Number(liveValue4(clipView.get("grid_quantization")));
+  const grid = Number(liveValue5(clipView.get("grid_quantization")));
   const beats = GRID_BEATS[grid] ?? 1;
-  if (liveValue4(clipView.get("grid_is_triplet")) == 1) {
+  if (liveValue5(clipView.get("grid_is_triplet")) == 1) {
     return beats * (2 / 3);
   }
   return beats;
@@ -1101,14 +1189,14 @@ function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
   return pitches;
 }
 function clipScale(clip2) {
-  const tonic = Number(liveValue4(clip2.get("root_note")));
+  const tonic = Number(liveValue5(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName(String(liveValue4(clip2.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName(String(liveValue5(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1224,7 +1312,7 @@ function arpeggiateGroups(groups, direction, stepBeats) {
   return notes;
 }
 function rewriteSelected(pitchesFromRoot) {
-  const clip2 = getDetailMidiClip2();
+  const clip2 = getDetailMidiClip3();
   if (!clip2) {
     return;
   }
@@ -1334,7 +1422,7 @@ function minor13() {
   fixedChord("minor13");
 }
 function lead() {
-  const clip2 = getDetailMidiClip2();
+  const clip2 = getDetailMidiClip3();
   if (!clip2) {
     return;
   }
@@ -1353,7 +1441,7 @@ function lead() {
   replaceSelectedNotes(clip2, selected, notes);
 }
 function arpeggiateSelected(direction) {
-  const clip2 = getDetailMidiClip2();
+  const clip2 = getDetailMidiClip3();
   if (!clip2) {
     return;
   }
@@ -1380,12 +1468,12 @@ function down() {
 
 // src/actions/midiClip.ts
 var live3 = new LiveAPI();
-var detailClip4 = new LiveAPI();
+var detailClip5 = new LiveAPI();
 function liveApi3(path) {
   live3.path = path;
   return live3;
 }
-function liveValue5(raw) {
+function liveValue6(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1405,24 +1493,24 @@ function liveInts2(raw) {
   }
   return out;
 }
-function getDetailMidiClip3() {
-  const songView4 = liveApi3("live_set view");
-  if (!songView4.id || songView4.id == 0) {
+function getDetailMidiClip4() {
+  const songView5 = liveApi3("live_set view");
+  if (!songView5.id || songView5.id == 0) {
     return null;
   }
-  if (songView4.call("is_view_visible", "Detail/Clip") != 1) {
+  if (songView5.call("is_view_visible", "Detail/Clip") != 1) {
     return null;
   }
-  detailClip4.path = "live_set view detail_clip";
-  if (!detailClip4.id || detailClip4.id == 0) {
+  detailClip5.path = "live_set view detail_clip";
+  if (!detailClip5.id || detailClip5.id == 0) {
     return null;
   }
-  if (liveValue5(detailClip4.get("is_midi_clip")) != 1) {
+  if (liveValue6(detailClip5.get("is_midi_clip")) != 1) {
     return null;
   }
-  return detailClip4;
+  return detailClip5;
 }
-function parseNotes(raw) {
+function parseNotes2(raw) {
   if (!raw) {
     return [];
   }
@@ -1430,10 +1518,10 @@ function parseNotes(raw) {
   return parsed && parsed.notes ? parsed.notes : [];
 }
 function selectedNotes2(clip2) {
-  return parseNotes(clip2.call("get_selected_notes_extended"));
+  return parseNotes2(clip2.call("get_selected_notes_extended"));
 }
 function applySelected(update) {
-  const clip2 = getDetailMidiClip3();
+  const clip2 = getDetailMidiClip4();
   if (!clip2) {
     return;
   }
@@ -1473,14 +1561,14 @@ function pitchClass2(pitch) {
   return (pitch % 12 + 12) % 12;
 }
 function clipScale2(clip2) {
-  const tonic = Number(liveValue5(clip2.get("root_note")));
+  const tonic = Number(liveValue6(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts2(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName2(String(liveValue5(clip2.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName2(String(liveValue6(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1669,9 +1757,9 @@ var MID_DELTA = 399.751894;
 var LOW_ALPHA = 70;
 var LOW_BETA = 118.426374;
 var LOW_GAMMA = 7504 / 5567;
-var song2 = new LiveAPI();
+var song3 = new LiveAPI();
 var volume = new LiveAPI();
-function liveValue6(raw) {
+function liveValue7(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1717,11 +1805,11 @@ function bumpTrack(trackNumber, deltaDb) {
   if (n < 1) {
     return;
   }
-  song2.path = "live_set";
-  if (!song2.id || song2.id == 0) {
+  song3.path = "live_set";
+  if (!song3.id || song3.id == 0) {
     return;
   }
-  const count = song2.getcount("tracks");
+  const count = song3.getcount("tracks");
   if (n > count) {
     return;
   }
@@ -1729,12 +1817,12 @@ function bumpTrack(trackNumber, deltaDb) {
   if (!volume.id || volume.id == 0) {
     return;
   }
-  const current = Number(liveValue6(volume.get("value")));
+  const current = Number(liveValue7(volume.get("value")));
   if (!Number.isFinite(current)) {
     return;
   }
-  const min = Number(liveValue6(volume.get("min")));
-  const max = Number(liveValue6(volume.get("max")));
+  const min = Number(liveValue7(volume.get("min")));
+  const max = Number(liveValue7(volume.get("max")));
   const lo = Number.isFinite(min) ? min : 0;
   const hi = Number.isFinite(max) ? max : 1;
   const next = dbToLive(liveToDb(current) + deltaDb);
@@ -1752,14 +1840,14 @@ var SCROLL_PAGES2 = 16;
 var SCROLL_LEFT = 2;
 var SCROLL_RIGHT2 = 3;
 var appView2 = new LiveAPI();
-var songView3 = new LiveAPI();
-var song3 = new LiveAPI();
+var songView4 = new LiveAPI();
+var song4 = new LiveAPI();
 var track3 = new LiveAPI();
 var device2 = new LiveAPI();
 var parent2 = new LiveAPI();
 var thisDev = new LiveAPI();
 var param2 = new LiveAPI();
-function liveValue7(raw) {
+function liveValue8(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1812,13 +1900,13 @@ function selectChainEnd(which) {
   const id = device2.id;
   appView2.path = "live_app view";
   appView2.call("focus_view", "Detail/DeviceChain");
-  songView3.path = "live_set view";
-  songView3.call("select_device", "id", id);
+  songView4.path = "live_set view";
+  songView4.call("select_device", "id", id);
   const dir = which === 0 ? SCROLL_LEFT : SCROLL_RIGHT2;
   for (let i = 0; i < SCROLL_PAGES2; i++) {
     appView2.call("scroll_view", dir, "Detail/DeviceChain", 0);
   }
-  songView3.call("select_device", "id", id);
+  songView4.call("select_device", "id", id);
 }
 function setChainCollapsed(collapsed) {
   const chain = currentChain2();
@@ -1868,13 +1956,13 @@ function moveSelected(delta) {
   if (drop < 0 || drop > n) {
     return;
   }
-  song3.path = "live_set";
-  if (!song3.id || song3.id == 0) {
+  song4.path = "live_set";
+  if (!song4.id || song4.id == 0) {
     return;
   }
-  song3.call("move_device", "id", selectedId, "id", chain.id, drop);
-  songView3.path = "live_set view";
-  songView3.call("select_device", "id", selectedId);
+  song4.call("move_device", "id", selectedId, "id", chain.id, drop);
+  songView4.path = "live_set view";
+  songView4.call("select_device", "id", selectedId);
 }
 function chainLeft() {
   moveSelected(-1);
@@ -1903,7 +1991,7 @@ function applyChainEffects(onFor) {
     if (!device2.id || device2.id == 0 || device2.id == selfId) {
       continue;
     }
-    const kind = Number(liveValue7(device2.get("type")));
+    const kind = Number(liveValue8(device2.get("type")));
     if (kind != 2 && kind != 4) {
       continue;
     }
@@ -1941,6 +2029,7 @@ void bang;
 void cliploop;
 void loc;
 void clip;
+void playFrom;
 void volup;
 void voldown;
 void chord;

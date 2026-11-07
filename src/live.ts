@@ -1,3 +1,4 @@
+import { playFrom } from './actions/alternativePlayback';
 import { clip, cliploop, loc } from './actions/arrangementView';
 import { bass1, bass2, bass3, bass4, bass5, bass6 } from './actions/bass';
 import { BINDINGS } from './bindings';
@@ -127,6 +128,7 @@ void bang;
 void cliploop;
 void loc;
 void clip;
+void playFrom;
 void volup;
 void voldown;
 void chord;

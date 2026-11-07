@@ -5,6 +5,7 @@ import type { Bindings } from './sharedTypes';
 export const BINDINGS: Bindings = {
   hotkeys: [
     { key: '`', bind: 'cliploop', keys: '^j' },
+    { key: '^Space', bind: 'playFrom' },
     { key: '^!Left', bind: 'chainLeft' },
     { key: '^!Right', bind: 'chainRight' },
   ],

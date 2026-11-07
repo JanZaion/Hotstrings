@@ -21,6 +21,7 @@ hsBinds := Map()
 hsBuffer := ""
 capturing := false
 hudEnabled := true
+playFromKey := ""
 hud := 0
 hudText := 0
 hudMinW := 0
@@ -165,9 +166,19 @@ WatchCmd() {
     if !FileExist(CMD_PATH) {
         return
     }
-    cmd := Trim(StrSplit(FileRead(CMD_PATH, "UTF-8"), "`n", "`r")[1])
+    text := FileRead(CMD_PATH, "UTF-8")
     try {
         FileDelete(CMD_PATH)
+    }
+    loop parse text, "`n", "`r" {
+        ApplyCmd(Trim(A_LoopField))
+    }
+    UpdateTip()
+}
+
+ApplyCmd(cmd) {
+    if cmd = "" {
+        return
     }
     parts := StrSplit(cmd, A_Space, " `t")
     if parts.Length = 0 {
@@ -192,15 +203,16 @@ WatchCmd() {
             SetHudEnabled(true)
         case "hudoff":
             SetHudEnabled(false)
+        case "playfromon":
+            SetPlayFromEnabled(true)
+        case "playfromoff":
+            SetPlayFromEnabled(false)
         case "quit":
             try {
                 FileDelete(KEYS_PATH)
             }
             ExitApp
-        case "":
-            return
     }
-    UpdateTip()
 }
 
 SetHsIdle(ms) {
@@ -250,16 +262,31 @@ CapturingLive(*) {
 }
 
 RegisterHot(keyName, bindName, value?, keys?) {
-    global bad
+    global bad, playFromKey
     keysToSend := IsSet(keys) ? String(keys) : ""
     fn := IsSet(value)
         ? (*) => FireHot(bindName, keysToSend, value)
         : (*) => FireHot(bindName, keysToSend)
     try {
         Hotkey(keyName, fn)
+        if bindName = "playFrom" {
+            playFromKey := keyName
+        }
     } catch as err {
         bad.Push(keyName " (" err.Message ")")
     }
+}
+
+SetPlayFromEnabled(on) {
+    global playFromKey
+    if playFromKey = "" {
+        return
+    }
+    HotIf LiveIdle
+    try {
+        Hotkey(playFromKey, on ? "On" : "Off")
+    }
+    HotIf
 }
 
 FireHot(bindName, keysToSend, value?) {
