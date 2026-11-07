@@ -1140,6 +1140,7 @@ var BINDINGS = {
     { key: "=", bind: "volup", int: true },
     { key: "-", bind: "voldown", int: true },
     { key: "headroom", bind: "headroom" },
+    { key: "heat", bind: "heat" },
     { key: "low", bind: "low" },
     { key: "high", bind: "high" },
     { key: "notch", bind: "notch" },
@@ -1982,7 +1983,7 @@ function volup(trackNumber) {
 function voldown(trackNumber) {
   bumpTrack(trackNumber, -STEP_DB);
 }
-function headroom() {
+function bumpRegularTracks(deltaDb) {
   song3.path = "live_set";
   if (!song3.id || song3.id == 0) {
     return;
@@ -1996,8 +1997,14 @@ function headroom() {
     if (liveValue7(track3.get("is_foldable")) == 1) {
       continue;
     }
-    bumpVolume(track3.path + " mixer_device volume", -STEP_DB);
+    bumpVolume(track3.path + " mixer_device volume", deltaDb);
   }
+}
+function headroom() {
+  bumpRegularTracks(-STEP_DB);
+}
+function heat() {
+  bumpRegularTracks(STEP_DB);
 }
 
 // src/actions/rack.ts
@@ -2199,6 +2206,7 @@ void playFrom;
 void volup;
 void voldown;
 void headroom;
+void heat;
 void chord;
 void chord7;
 void chord9;

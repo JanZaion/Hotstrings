@@ -43,6 +43,7 @@ export const BINDINGS: Bindings = {
     { key: '=', bind: 'volup', int: true },
     { key: '-', bind: 'voldown', int: true },
     { key: 'headroom', bind: 'headroom' },
+    { key: 'heat', bind: 'heat' },
     { key: 'low', bind: 'low' },
     { key: 'high', bind: 'high' },
     { key: 'notch', bind: 'notch' },

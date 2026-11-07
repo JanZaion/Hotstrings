@@ -105,7 +105,7 @@ export function voldown(trackNumber: unknown) {
   bumpTrack(trackNumber, -STEP_DB);
 }
 
-export function headroom() {
+function bumpRegularTracks(deltaDb: number) {
   song.path = 'live_set';
   if (!song.id || song.id == 0) {
     return;
@@ -119,6 +119,14 @@ export function headroom() {
     if (liveValue(track.get('is_foldable')) == 1) {
       continue;
     }
-    bumpVolume(track.path + ' mixer_device volume', -STEP_DB);
+    bumpVolume(track.path + ' mixer_device volume', deltaDb);
   }
+}
+
+export function headroom() {
+  bumpRegularTracks(-STEP_DB);
+}
+
+export function heat() {
+  bumpRegularTracks(STEP_DB);
 }

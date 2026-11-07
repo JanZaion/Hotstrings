@@ -105,7 +105,7 @@ import {
   wav,
 } from './actions/devices';
 import { doub, fit, half, inv, rev } from './actions/midiClip';
-import { headroom, volup, voldown } from './actions/mixer';
+import { headroom, heat, volup, voldown } from './actions/mixer';
 import { chainLeft, chainRight, col, exp, first, last, sol, unsol } from './actions/rack';
 
 autowatch = 1;
@@ -134,6 +134,7 @@ void playFrom;
 void volup;
 void voldown;
 void headroom;
+void heat;
 void chord;
 void chord7;
 void chord9;
