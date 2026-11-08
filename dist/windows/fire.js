@@ -9,10 +9,10 @@ box.setattr("border", 0);
 var MIN_MS = 500;
 var MAX_MS = 12e3;
 var DEFAULT_MS = 4e3;
-var MAX_PARTICLES = 90;
+var MAX_SPARKS = 48;
 var FPS_MS = 33;
 var intensity = idleToIntensity(DEFAULT_MS);
-var particles = [];
+var sparks = [];
 var spawnAcc = 0;
 var tickCount = 0;
 var running = false;
@@ -31,142 +31,198 @@ function msg_int(v) {
   setIdle(v);
 }
 function viewW() {
+  const s = mgraphics.size;
+  if (s && s[0] > 0) {
+    return s[0];
+  }
   return box.rect[2] - box.rect[0];
 }
 function viewH() {
+  const s = mgraphics.size;
+  if (s && s[1] > 0) {
+    return s[1];
+  }
   return box.rect[3] - box.rect[1];
 }
 function rand(min, max) {
   return min + Math.random() * (max - min);
 }
-function spawnOne(w, h) {
-  const spread = (0.08 + intensity * 0.22) * w;
-  const spark = Math.random() < 0.1 + intensity * 0.12;
-  particles.push({
-    x: w * 0.5 + rand(-spread, spread),
-    y: h * rand(0.82, 0.96),
-    vx: rand(-0.35, 0.35) * (0.35 + intensity),
-    vy: -rand(0.55, 2.1) * (0.28 + intensity * 1.25),
+function heat() {
+  return 0.12 + intensity * 0.88;
+}
+function fbm(x, y) {
+  return Math.sin(x) * 0.5 + Math.sin(x * 2.17 + y * 1.3) * 0.32 + Math.sin(x * 4.9 - y * 0.8) * 0.18;
+}
+function teardrop(t) {
+  const tip = Math.pow(1 - t, 1.28);
+  const bulge = 0.42 + 0.58 * Math.sin(Math.min(1, t * 1.15) * Math.PI * 0.72);
+  return tip * bulge;
+}
+function spawnSpark(w, h) {
+  const ht = heat();
+  const cx = w * 0.5;
+  const baseY = h * 0.93;
+  const flameH = h * (0.3 + ht * 0.6);
+  const t = rand(0.05, 0.72);
+  const spread = w * (0.04 + ht * 0.1) * teardrop(t);
+  sparks.push({
+    x: cx + rand(-spread, spread),
+    y: baseY - t * flameH + rand(-2, 2),
+    vx: rand(-0.22, 0.22) * (0.4 + ht),
+    vy: -rand(0.45, 1.6) * (0.35 + ht * 1.1),
     life: 1,
-    decay: rand(0.016, 0.038) / (0.38 + intensity * 0.85),
-    size: spark ? rand(0.8, 1.8) : rand(2.2, 6.4) * (0.35 + intensity * 1.05),
-    spark: spark ? 1 : 0
+    decay: rand(0.012, 0.03) / (0.45 + ht * 0.7),
+    size: rand(0.45, 1.35) * (0.55 + ht * 0.7),
+    hot: Math.random() < 0.35 + ht * 0.4 ? 1 : 0
   });
 }
 function tick() {
   const w = viewW();
   const h = viewH();
+  const ht = heat();
   tickCount += 1;
-  const wind = Math.sin(tickCount * 0.045) * 0.28 + Math.sin(tickCount * 0.11) * 0.14;
-  spawnAcc += 0.35 + intensity * 3.6;
-  while (spawnAcc >= 1 && particles.length < MAX_PARTICLES) {
+  const wind = Math.sin(tickCount * 0.041) * 0.32 + Math.sin(tickCount * 0.093) * 0.16;
+  spawnAcc += 0.12 + ht * 1.55;
+  while (spawnAcc >= 1 && sparks.length < MAX_SPARKS) {
     spawnAcc -= 1;
-    spawnOne(w, h);
+    spawnSpark(w, h);
   }
-  if (spawnAcc > 4) {
-    spawnAcc = 4;
+  if (spawnAcc > 3) {
+    spawnAcc = 3;
   }
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.vx += wind * 0.018;
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const p = sparks[i];
+    p.vx += wind * 0.02;
     p.x += p.vx;
     p.y += p.vy;
-    p.vy -= 0.01 * (0.25 + intensity);
-    const rise = Math.max(0, 1 - p.y / h);
-    p.x += (w * 0.5 - p.x) * (0.012 + rise * 0.03);
+    p.vy -= 8e-3 * (0.3 + ht);
+    p.x += (w * 0.5 - p.x) * 8e-3;
     p.life -= p.decay;
-    if (p.life <= 0 || p.y < -p.size) {
-      particles.splice(i, 1);
+    if (p.life <= 0 || p.y < -4) {
+      sparks.splice(i, 1);
     }
   }
   mgraphics.redraw();
 }
-function drawEllipse(cx, cy, rx, ry, r, g, b, a) {
-  if (a <= 0 || rx <= 0 || ry <= 0) {
+function fillRadial(cx, cy, rx, ry, inner, outer) {
+  if (rx <= 0 || ry <= 0) {
     return;
   }
-  mgraphics.set_source_rgba(r, g, b, a);
+  const rad = Math.max(rx, ry);
+  const grad = mgraphics.pattern_create_radial(cx, cy, 0, cx, cy, rad);
+  grad.add_color_stop_rgba(0, inner[0], inner[1], inner[2], inner[3]);
+  grad.add_color_stop_rgba(0.45, inner[0], inner[1] * 0.55, inner[2] * 0.3, inner[3] * 0.4);
+  grad.add_color_stop_rgba(1, outer[0], outer[1], outer[2], outer[3]);
+  mgraphics.set_source(grad);
   mgraphics.ellipse(cx - rx, cy - ry, rx * 2, ry * 2);
   mgraphics.fill();
 }
-function particleColor(p) {
-  const life = p.life;
-  const col = { r: 1, g: 0.4, b: 0.05, a: 0.6 };
-  if (p.spark) {
-    col.r = 1;
-    col.g = 0.92;
-    col.b = 0.62;
-    col.a = life * 0.95;
-    return col;
+function drawTongue(cx, baseY, flameW, flameH, time, tongue, ht) {
+  const steps = 16;
+  const leanAmt = tongue.lean * flameW * 1.15;
+  const width = flameW * tongue.width;
+  const height = flameH * tongue.height;
+  if (width < 0.5 || height < 2) {
+    return;
   }
-  if (life > 0.72) {
-    const t = (life - 0.72) / 0.28;
-    col.r = 1;
-    col.g = 0.82 + t * 0.16;
-    col.b = 0.32 + t * 0.5;
-    col.a = 0.62 + t * 0.28;
-  } else if (life > 0.38) {
-    const t = (life - 0.38) / 0.34;
-    col.r = 1;
-    col.g = 0.32 + t * 0.5;
-    col.b = 0.04 + t * 0.28;
-    col.a = 0.5 + t * 0.14;
+  const tipX = cx + leanAmt + fbm(time * 0.9 + tongue.phase, 0.2) * width * 0.35;
+  const tipY = baseY - height;
+  mgraphics.move_to(cx, baseY);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const y = baseY - t * height;
+    const wobble = fbm(time * 1.15 + tongue.phase, t * 6.2) * 0.22;
+    const half = width * teardrop(t) * (1 + wobble);
+    const x = cx + leanAmt * t * t + half;
+    mgraphics.line_to(x, y);
+  }
+  mgraphics.line_to(tipX, tipY);
+  for (let i = steps; i >= 1; i--) {
+    const t = i / steps;
+    const y = baseY - t * height;
+    const wobble = fbm(time * 1.15 + tongue.phase + 2.1, t * 6.2) * 0.22;
+    const half = width * teardrop(t) * (1 + wobble);
+    const x = cx + leanAmt * t * t - half;
+    mgraphics.line_to(x, y);
+  }
+  mgraphics.close_path();
+  const grad = mgraphics.pattern_create_linear(cx, baseY, tipX, tipY);
+  if (tongue.kind === "halo") {
+    grad.add_color_stop_rgba(0, 1, 0.22, 0.02, 0.2 * ht);
+    grad.add_color_stop_rgba(0.4, 0.95, 0.12, 0.01, 0.1 * ht);
+    grad.add_color_stop_rgba(1, 0.35, 0.02, 0, 0);
+  } else if (tongue.kind === "core") {
+    grad.add_color_stop_rgba(0, 1, 0.98, 0.88, 0.92 * ht);
+    grad.add_color_stop_rgba(0.35, 1, 0.88, 0.42, 0.72 * ht);
+    grad.add_color_stop_rgba(0.75, 1, 0.55, 0.12, 0.22 * ht);
+    grad.add_color_stop_rgba(1, 1, 0.35, 0.05, 0);
   } else {
-    const t = life / 0.38;
-    col.r = 0.5 + t * 0.5;
-    col.g = 0.04 + t * 0.28;
-    col.b = 0.015;
-    col.a = t * 0.48;
+    grad.add_color_stop_rgba(0, 1, 0.72, 0.22, 0.82 * ht);
+    grad.add_color_stop_rgba(0.28, 1, 0.48, 0.06, 0.78 * ht);
+    grad.add_color_stop_rgba(0.62, 1, 0.28, 0.02, 0.42 * ht);
+    grad.add_color_stop_rgba(1, 0.55, 0.06, 0, 0);
   }
-  return col;
+  mgraphics.set_source(grad);
+  mgraphics.fill();
+}
+function paintSparks() {
+  for (const p of sparks) {
+    const a = p.life * (0.35 + p.hot * 0.45);
+    if (a <= 0) {
+      continue;
+    }
+    const g = p.hot ? 0.92 : 0.45 + p.life * 0.3;
+    const b = p.hot ? 0.55 : 0.06;
+    const rx = p.size * (0.55 + (1 - p.life) * 0.4);
+    const ry = p.size * (1.4 + (1 - p.life) * 1.1);
+    mgraphics.set_source_rgba(1, g, b, a * 0.35);
+    mgraphics.ellipse(p.x - rx * 1.8, p.y - ry * 1.8, rx * 3.6, ry * 3.6);
+    mgraphics.fill();
+    mgraphics.set_source_rgba(1, Math.min(1, g + 0.15), b + 0.15, a);
+    mgraphics.ellipse(p.x - rx, p.y - ry, rx * 2, ry * 2);
+    mgraphics.fill();
+  }
 }
 function paint() {
   const w = viewW();
   const h = viewH();
-  const flicker = 0.82 + Math.sin(tickCount * 0.31) * 0.08 + Math.random() * 0.1;
-  const heat = intensity * flicker;
-  const cx = w * 0.5;
-  const baseY = h * 0.9;
-  drawEllipse(
+  if (w <= 1 || h <= 1) {
+    return;
+  }
+  const ht = heat();
+  const time = tickCount * 0.07;
+  const sway = Math.sin(time * 0.85) * 0.42 + Math.sin(time * 1.63) * 0.2;
+  const cx = w * 0.5 + sway * w * 0.02;
+  const baseY = h * 0.94;
+  const flameW = w * (0.13 + ht * 0.2);
+  const flameH = h * (0.28 + ht * 0.64);
+  fillRadial(
     cx,
     baseY,
-    (10 + heat * 26) * (w / 70),
-    (7 + heat * 16) * (h / 90),
-    0.9,
-    0.18,
-    0.02,
-    0.12 + heat * 0.18
+    flameW * (1.8 + ht * 1.4),
+    flameH * (0.22 + ht * 0.12),
+    [1, 0.32, 0.04, 0.22 * ht],
+    [0.4, 0.04, 0, 0]
   );
-  drawEllipse(
-    cx,
-    baseY + h * 0.02,
-    (6 + heat * 16) * (w / 70),
-    (4 + heat * 9) * (h / 90),
-    1,
-    0.35,
-    0.04,
-    0.16 + heat * 0.22
-  );
-  drawEllipse(
-    cx,
-    baseY + h * 0.03,
-    (3 + heat * 8) * (w / 70),
-    (2 + heat * 4) * (h / 90),
-    1,
-    0.7,
-    0.25,
-    0.2 + heat * 0.28
-  );
-  for (const p of particles) {
-    const col = particleColor(p);
-    const rx = p.size * (0.7 + (1 - p.life) * 0.35);
-    const ry = p.size * (1.15 + (1 - p.life) * 0.55);
-    drawEllipse(p.x, p.y, rx * 1.8, ry * 1.8, col.r, col.g * 0.55, col.b * 0.4, col.a * 0.22);
-    drawEllipse(p.x, p.y, rx, ry, col.r, col.g, col.b, col.a);
-    if (p.life > 0.55 && !p.spark) {
-      drawEllipse(p.x, p.y + ry * 0.15, rx * 0.4, ry * 0.35, 1, 0.95, 0.75, (p.life - 0.55) * 0.7);
-    }
+  const tongues = [
+    { lean: sway * 0.15, width: 1.7, height: 0.88, phase: 0.2, kind: "halo" },
+    { lean: -0.72 + sway * 0.35, width: 0.52, height: 0.7, phase: 1.4, kind: "body" },
+    { lean: 0.8 + sway * 0.28, width: 0.46, height: 0.62, phase: 2.7, kind: "body" },
+    { lean: sway * 0.55, width: 1, height: 1, phase: 0.6, kind: "body" },
+    { lean: sway * 0.35, width: 0.38, height: 0.52, phase: 3.1, kind: "core" }
+  ];
+  for (const tongue of tongues) {
+    drawTongue(cx, baseY, flameW, flameH, time, tongue, ht);
   }
+  fillRadial(
+    cx,
+    baseY - flameH * 0.08,
+    flameW * 0.34,
+    flameH * 0.16,
+    [1, 0.96, 0.82, 0.55 * ht],
+    [1, 0.5, 0.08, 0]
+  );
+  paintSparks();
 }
 function startTask() {
   if (running) {
