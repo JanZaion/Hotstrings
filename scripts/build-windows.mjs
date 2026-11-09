@@ -10,8 +10,13 @@ const watchMode = process.argv.includes('--watch');
 const amxdName = 'Keyboard_Warrior.amxd';
 
 const esbuildOptions = {
-  entryPoints: [join(root, 'src', 'host.ts'), join(root, 'src', 'live.ts')],
+  entryPoints: [
+    join(root, 'src', 'host.ts'),
+    join(root, 'src', 'live.ts'),
+    join(root, 'src', 'jsui', 'hotstrings.ts'),
+  ],
   outdir: dist,
+  entryNames: '[name]',
   bundle: true,
   format: 'esm',
   platform: 'neutral',

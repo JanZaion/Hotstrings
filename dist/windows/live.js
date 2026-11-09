@@ -379,488 +379,6 @@ function bass6() {
   writeBassPattern(BASS6_CYCLE, BASS6_HITS);
 }
 
-// src/actions/devices.ts
-var SCROLL_PAGES = 16;
-var SCROLL_RIGHT = 3;
-var appView = new LiveAPI();
-var songView3 = new LiveAPI();
-var track2 = new LiveAPI();
-var device = new LiveAPI();
-var parent = new LiveAPI();
-var param = new LiveAPI();
-var NATIVE_DEVICES = {
-  ana: "Analog",
-  colis: "Collision",
-  dri: "Drift",
-  drumr: "Drum Rack",
-  elec: "Electric",
-  exti: "External Instrument",
-  imp: "Impulse",
-  irack: "Instrument Rack",
-  meld: "Meld",
-  op: "Operator",
-  samp: "Sampler",
-  simp: "Simpler",
-  ten: "Tension",
-  wav: "Wavetable",
-  amp: "Amp",
-  arack: "Audio Effect Rack",
-  af: "Auto Filter",
-  apan: "Auto Pan-Tremolo",
-  ash: "Auto Shift",
-  beat: "Beat Repeat",
-  cab: "Cabinet",
-  cheq: "Channel EQ",
-  ens: "Chorus-Ensemble",
-  comp: "Compressor",
-  corp: "Corpus",
-  del: "Delay",
-  drumb: "Drum Buss",
-  tube: "Dynamic Tube",
-  echo: "Echo",
-  eq8: "EQ Eight",
-  eq3: "EQ Three",
-  eros: "Erosion",
-  exta: "External Audio Effect",
-  fdel: "Filter Delay",
-  gate: "Gate",
-  glue: "Glue Compressor",
-  grain: "Grain Delay",
-  hyb: "Hybrid Reverb",
-  lim: "Limiter",
-  loop: "Looper",
-  mbd: "Multiband Dynamics",
-  od: "Overdrive",
-  ped: "Pedal",
-  phas: "Phaser-Flanger",
-  red: "Redux",
-  reso: "Resonators",
-  verb: "Reverb",
-  roar: "Roar",
-  sat: "Saturator",
-  shif: "Shifter",
-  sres: "Spectral Resonator",
-  stime: "Spectral Time",
-  spec: "Spectrum",
-  tun: "Tuner",
-  ut: "Utility",
-  vin: "Vinyl Distortion",
-  voc: "Vocoder",
-  arp: "Arpeggiator",
-  cc: "CC Control",
-  chordmidi: "Chord",
-  mrack: "MIDI Effect Rack",
-  nlen: "Note Length",
-  pit: "Pitch",
-  rand: "Random",
-  sca: "Scale",
-  vel: "Velocity"
-};
-var INSTRUMENT_TYPE = 1;
-var INSTRUMENT_NAMES = /* @__PURE__ */ new Set([
-  NATIVE_DEVICES.ana,
-  NATIVE_DEVICES.colis,
-  NATIVE_DEVICES.dri,
-  NATIVE_DEVICES.drumr,
-  NATIVE_DEVICES.elec,
-  NATIVE_DEVICES.exti,
-  NATIVE_DEVICES.imp,
-  NATIVE_DEVICES.irack,
-  NATIVE_DEVICES.meld,
-  NATIVE_DEVICES.op,
-  NATIVE_DEVICES.samp,
-  NATIVE_DEVICES.simp,
-  NATIVE_DEVICES.ten,
-  NATIVE_DEVICES.wav
-]);
-function liveValue4(raw) {
-  if (raw instanceof Array) {
-    return raw[0];
-  }
-  return raw;
-}
-function liveId2(raw) {
-  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
-  for (const item of items) {
-    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
-      continue;
-    }
-    const n = Number(item);
-    if (Number.isFinite(n) && n > 0) {
-      return n;
-    }
-  }
-  return 0;
-}
-function currentChain() {
-  track2.path = "live_set view selected_track";
-  if (!track2.id || track2.id == 0) {
-    return null;
-  }
-  device.path = track2.path + " view selected_device";
-  if (device.id && device.id != 0) {
-    const id = liveId2(device.get("canonical_parent"));
-    if (id) {
-      parent.id = id;
-      if (parent.type === "Chain" || parent.type === "DrumChain") {
-        return parent;
-      }
-    }
-  }
-  return track2;
-}
-function findInstrumentIndex(chain) {
-  const n = chain.getcount("devices");
-  for (let i = 0; i < n; i++) {
-    device.path = chain.path + " devices " + i;
-    if (!device.id || device.id == 0) {
-      continue;
-    }
-    const kind = liveValue4(device.get("type"));
-    if (kind == INSTRUMENT_TYPE || kind === "instrument") {
-      return i;
-    }
-  }
-  return -1;
-}
-function selectInserted(chain, index, scrollEnd) {
-  device.path = chain.path + " devices " + index;
-  if (!device.id || device.id == 0) {
-    return;
-  }
-  const id = device.id;
-  appView.path = "live_app view";
-  appView.call("focus_view", "Detail/DeviceChain");
-  songView3.path = "live_set view";
-  songView3.call("select_device", "id", id);
-  if (!scrollEnd) {
-    return;
-  }
-  for (let i = 0; i < SCROLL_PAGES; i++) {
-    appView.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
-  }
-  songView3.call("select_device", "id", id);
-}
-function insertAtChainEnd(name) {
-  const chain = currentChain();
-  if (!chain) {
-    return false;
-  }
-  let index = -1;
-  let scrollEnd = true;
-  try {
-    if (INSTRUMENT_NAMES.has(name)) {
-      index = findInstrumentIndex(chain);
-      if (index >= 0) {
-        chain.call("delete_device", index);
-        chain.call("insert_device", name, index);
-        scrollEnd = false;
-      } else {
-        chain.call("insert_device", name);
-      }
-    } else {
-      chain.call("insert_device", name);
-    }
-  } catch {
-    return false;
-  }
-  const n = chain.getcount("devices");
-  if (n < 1) {
-    return false;
-  }
-  if (index < 0) {
-    index = n - 1;
-  }
-  selectInserted(chain, index, scrollEnd);
-  return !!(device.id && device.id != 0);
-}
-function ana() {
-  insertAtChainEnd(NATIVE_DEVICES.ana);
-}
-function colis() {
-  insertAtChainEnd(NATIVE_DEVICES.colis);
-}
-function dri() {
-  insertAtChainEnd(NATIVE_DEVICES.dri);
-}
-function drumr() {
-  insertAtChainEnd(NATIVE_DEVICES.drumr);
-}
-function elec() {
-  insertAtChainEnd(NATIVE_DEVICES.elec);
-}
-function exti() {
-  insertAtChainEnd(NATIVE_DEVICES.exti);
-}
-function imp() {
-  insertAtChainEnd(NATIVE_DEVICES.imp);
-}
-function irack() {
-  insertAtChainEnd(NATIVE_DEVICES.irack);
-}
-function meld() {
-  insertAtChainEnd(NATIVE_DEVICES.meld);
-}
-function op() {
-  insertAtChainEnd(NATIVE_DEVICES.op);
-}
-function samp() {
-  insertAtChainEnd(NATIVE_DEVICES.samp);
-}
-function simp() {
-  insertAtChainEnd(NATIVE_DEVICES.simp);
-}
-function ten() {
-  insertAtChainEnd(NATIVE_DEVICES.ten);
-}
-function wav() {
-  insertAtChainEnd(NATIVE_DEVICES.wav);
-}
-function amp() {
-  insertAtChainEnd(NATIVE_DEVICES.amp);
-}
-function arack() {
-  insertAtChainEnd(NATIVE_DEVICES.arack);
-}
-function af() {
-  insertAtChainEnd(NATIVE_DEVICES.af);
-}
-function apan() {
-  insertAtChainEnd(NATIVE_DEVICES.apan);
-}
-function ash() {
-  insertAtChainEnd(NATIVE_DEVICES.ash);
-}
-function beat() {
-  insertAtChainEnd(NATIVE_DEVICES.beat);
-}
-function cab() {
-  insertAtChainEnd(NATIVE_DEVICES.cab);
-}
-function cheq() {
-  insertAtChainEnd(NATIVE_DEVICES.cheq);
-}
-function ens() {
-  insertAtChainEnd(NATIVE_DEVICES.ens);
-}
-function comp() {
-  insertAtChainEnd(NATIVE_DEVICES.comp);
-}
-function corp() {
-  insertAtChainEnd(NATIVE_DEVICES.corp);
-}
-function del() {
-  insertAtChainEnd(NATIVE_DEVICES.del);
-}
-function drumb() {
-  insertAtChainEnd(NATIVE_DEVICES.drumb);
-}
-function tube() {
-  insertAtChainEnd(NATIVE_DEVICES.tube);
-}
-function echo() {
-  insertAtChainEnd(NATIVE_DEVICES.echo);
-}
-var EQ8_LOW_CUT_12 = 1;
-var EQ8_NOTCH = 4;
-var EQ8_HIGH_CUT_12 = 6;
-var EQ8_HIGHPASS_HZ = 130;
-var EQ8_LOWPASS_HZ = 1e4;
-var EQ8_FREQ_MIN_HZ = 10;
-var EQ8_FREQ_MAX_HZ = 22e3;
-function eq8ParamPaths() {
-  const paths = {};
-  const path = device.path;
-  const n = device.getcount("parameters");
-  for (let i = 0; i < n; i++) {
-    param.path = path + " parameters " + i;
-    if (!param.id || param.id == 0) {
-      continue;
-    }
-    const name = liveValue4(param.get("name"));
-    if (typeof name === "string" && name !== "") {
-      paths[name] = param.path;
-    }
-  }
-  return paths;
-}
-function setEq8Param(path, value) {
-  if (!path) {
-    return;
-  }
-  param.path = path;
-  if (!param.id || param.id == 0) {
-    return;
-  }
-  param.set("value", value);
-}
-function hzToEq8Value(hz) {
-  const min = Number(liveValue4(param.get("min")));
-  const max = Number(liveValue4(param.get("max")));
-  if (Number.isFinite(min) && Number.isFinite(max) && max > 1.5) {
-    return Math.max(min, Math.min(max, hz));
-  }
-  const t = Math.log(hz / EQ8_FREQ_MIN_HZ) / Math.log(EQ8_FREQ_MAX_HZ / EQ8_FREQ_MIN_HZ);
-  return Math.max(0, Math.min(1, t));
-}
-function setEq8Freq(path, hz) {
-  if (!path) {
-    return;
-  }
-  param.path = path;
-  if (!param.id || param.id == 0) {
-    return;
-  }
-  param.set("value", hzToEq8Value(hz));
-}
-function configureEq8(bands) {
-  if (!device.id || device.id == 0) {
-    return;
-  }
-  const paths = eq8ParamPaths();
-  for (const band2 of bands) {
-    for (const side of ["A", "B"]) {
-      setEq8Param(paths[band2.band + " Filter On " + side], 1);
-      setEq8Param(paths[band2.band + " Filter Type " + side], band2.type);
-      if (band2.freq != null) {
-        setEq8Freq(paths[band2.band + " Frequency " + side], band2.freq);
-      }
-    }
-  }
-}
-function insertEq8Preset(bands) {
-  if (!insertAtChainEnd(NATIVE_DEVICES.eq8)) {
-    return;
-  }
-  configureEq8(bands);
-}
-function eq8() {
-  insertAtChainEnd(NATIVE_DEVICES.eq8);
-}
-function low() {
-  insertEq8Preset([{ band: 4, type: EQ8_HIGH_CUT_12, freq: EQ8_LOWPASS_HZ }]);
-}
-function high() {
-  insertEq8Preset([{ band: 1, type: EQ8_LOW_CUT_12, freq: EQ8_HIGHPASS_HZ }]);
-}
-function notch() {
-  insertEq8Preset([{ band: 2, type: EQ8_NOTCH }]);
-}
-function band() {
-  insertEq8Preset([
-    { band: 1, type: EQ8_LOW_CUT_12, freq: EQ8_HIGHPASS_HZ },
-    { band: 4, type: EQ8_HIGH_CUT_12, freq: EQ8_LOWPASS_HZ }
-  ]);
-}
-function eq3() {
-  insertAtChainEnd(NATIVE_DEVICES.eq3);
-}
-function eros() {
-  insertAtChainEnd(NATIVE_DEVICES.eros);
-}
-function exta() {
-  insertAtChainEnd(NATIVE_DEVICES.exta);
-}
-function fdel() {
-  insertAtChainEnd(NATIVE_DEVICES.fdel);
-}
-function gate() {
-  insertAtChainEnd(NATIVE_DEVICES.gate);
-}
-function glue() {
-  insertAtChainEnd(NATIVE_DEVICES.glue);
-}
-function grain() {
-  insertAtChainEnd(NATIVE_DEVICES.grain);
-}
-function hyb() {
-  insertAtChainEnd(NATIVE_DEVICES.hyb);
-}
-function lim() {
-  insertAtChainEnd(NATIVE_DEVICES.lim);
-}
-function loop() {
-  insertAtChainEnd(NATIVE_DEVICES.loop);
-}
-function mbd() {
-  insertAtChainEnd(NATIVE_DEVICES.mbd);
-}
-function od() {
-  insertAtChainEnd(NATIVE_DEVICES.od);
-}
-function ped() {
-  insertAtChainEnd(NATIVE_DEVICES.ped);
-}
-function phas() {
-  insertAtChainEnd(NATIVE_DEVICES.phas);
-}
-function red() {
-  insertAtChainEnd(NATIVE_DEVICES.red);
-}
-function reso() {
-  insertAtChainEnd(NATIVE_DEVICES.reso);
-}
-function verb() {
-  insertAtChainEnd(NATIVE_DEVICES.verb);
-}
-function roar() {
-  insertAtChainEnd(NATIVE_DEVICES.roar);
-}
-function sat() {
-  insertAtChainEnd(NATIVE_DEVICES.sat);
-}
-function shif() {
-  insertAtChainEnd(NATIVE_DEVICES.shif);
-}
-function sres() {
-  insertAtChainEnd(NATIVE_DEVICES.sres);
-}
-function stime() {
-  insertAtChainEnd(NATIVE_DEVICES.stime);
-}
-function spec() {
-  insertAtChainEnd(NATIVE_DEVICES.spec);
-}
-function tun() {
-  insertAtChainEnd(NATIVE_DEVICES.tun);
-}
-function ut() {
-  insertAtChainEnd(NATIVE_DEVICES.ut);
-}
-function vin() {
-  insertAtChainEnd(NATIVE_DEVICES.vin);
-}
-function voc() {
-  insertAtChainEnd(NATIVE_DEVICES.voc);
-}
-function arp() {
-  insertAtChainEnd(NATIVE_DEVICES.arp);
-}
-function cc() {
-  insertAtChainEnd(NATIVE_DEVICES.cc);
-}
-function chordmidi() {
-  insertAtChainEnd(NATIVE_DEVICES.chordmidi);
-}
-function mrack() {
-  insertAtChainEnd(NATIVE_DEVICES.mrack);
-}
-function nlen() {
-  insertAtChainEnd(NATIVE_DEVICES.nlen);
-}
-function pit() {
-  insertAtChainEnd(NATIVE_DEVICES.pit);
-}
-function rand() {
-  insertAtChainEnd(NATIVE_DEVICES.rand);
-}
-function sca() {
-  insertAtChainEnd(NATIVE_DEVICES.sca);
-}
-function vel() {
-  insertAtChainEnd(NATIVE_DEVICES.vel);
-}
-
 // src/constants.ts
 var FIXED_CHORDS = {
   major: [0, 4, 7],
@@ -994,6 +512,74 @@ var SCALE_ALIASES = {
   spanish: "phrygian dominant",
   "minor gypsy": "hungarian minor"
 };
+var NATIVE_DEVICES = {
+  ana: "Analog",
+  colis: "Collision",
+  dri: "Drift",
+  drumr: "Drum Rack",
+  elec: "Electric",
+  exti: "External Instrument",
+  imp: "Impulse",
+  irack: "Instrument Rack",
+  meld: "Meld",
+  op: "Operator",
+  samp: "Sampler",
+  simp: "Simpler",
+  ten: "Tension",
+  wav: "Wavetable",
+  amp: "Amp",
+  arack: "Audio Effect Rack",
+  af: "Auto Filter",
+  apan: "Auto Pan-Tremolo",
+  ash: "Auto Shift",
+  beat: "Beat Repeat",
+  cab: "Cabinet",
+  cheq: "Channel EQ",
+  ens: "Chorus-Ensemble",
+  comp: "Compressor",
+  corp: "Corpus",
+  del: "Delay",
+  drumb: "Drum Buss",
+  tube: "Dynamic Tube",
+  echo: "Echo",
+  eq8: "EQ Eight",
+  eq3: "EQ Three",
+  eros: "Erosion",
+  exta: "External Audio Effect",
+  fdel: "Filter Delay",
+  gate: "Gate",
+  glue: "Glue Compressor",
+  grain: "Grain Delay",
+  hyb: "Hybrid Reverb",
+  lim: "Limiter",
+  loop: "Looper",
+  mbd: "Multiband Dynamics",
+  od: "Overdrive",
+  ped: "Pedal",
+  phas: "Phaser-Flanger",
+  red: "Redux",
+  reso: "Resonators",
+  verb: "Reverb",
+  roar: "Roar",
+  sat: "Saturator",
+  shif: "Shifter",
+  sres: "Spectral Resonator",
+  stime: "Spectral Time",
+  spec: "Spectrum",
+  tun: "Tuner",
+  ut: "Utility",
+  vin: "Vinyl Distortion",
+  voc: "Vocoder",
+  arp: "Arpeggiator",
+  cc: "CC Control",
+  chordmidi: "Chord",
+  mrack: "MIDI Effect Rack",
+  nlen: "Note Length",
+  pit: "Pitch",
+  rand: "Random",
+  sca: "Scale",
+  vel: "Velocity"
+};
 
 // src/bindings.ts
 var BINDINGS = {
@@ -1053,7 +639,7 @@ function liveApi2(path) {
   live2.path = path;
   return live2;
 }
-function liveValue5(raw) {
+function liveValue4(raw) {
   if (raw instanceof Array) {
     return raw[0];
   }
@@ -1085,7 +671,7 @@ function getDetailMidiClip3() {
   if (!detailClip4.id || detailClip4.id == 0) {
     return null;
   }
-  if (liveValue5(detailClip4.get("is_midi_clip")) != 1) {
+  if (liveValue4(detailClip4.get("is_midi_clip")) != 1) {
     return null;
   }
   return detailClip4;
@@ -1095,9 +681,9 @@ function gridStepBeats(clip2) {
   if (!clipView.id || clipView.id == 0) {
     return 1;
   }
-  const grid = Number(liveValue5(clipView.get("grid_quantization")));
+  const grid = Number(liveValue4(clipView.get("grid_quantization")));
   const beats = GRID_BEATS[grid] ?? 1;
-  if (liveValue5(clipView.get("grid_is_triplet")) == 1) {
+  if (liveValue4(clipView.get("grid_is_triplet")) == 1) {
     return beats * (2 / 3);
   }
   return beats;
@@ -1193,14 +779,14 @@ function diatonicPitches(rootPitch, tonicPc, scaleIntervals, toneCount) {
   return pitches;
 }
 function clipScale(clip2) {
-  const tonic = Number(liveValue5(clip2.get("root_note")));
+  const tonic = Number(liveValue4(clip2.get("root_note")));
   const tonicPc = Number.isFinite(tonic) ? (tonic % 12 + 12) % 12 : 0;
   const intervals = liveInts(clip2.get("scale_intervals")).filter((n) => n >= 0 && n < 12);
   if (intervals.length >= 2) {
     const scale = { tonicPc, intervals };
     return scale;
   }
-  const named = scaleIntervalsForName(String(liveValue5(clip2.get("scale_name")) ?? ""));
+  const named = scaleIntervalsForName(String(liveValue4(clip2.get("scale_name")) ?? ""));
   if (named && named.length >= 2) {
     const scale = { tonicPc, intervals: named };
     return scale;
@@ -1506,6 +1092,420 @@ function dearp() {
     return;
   }
   replaceSelectedNotes(clip2, selected, notes);
+}
+
+// src/actions/devices.ts
+var SCROLL_PAGES = 16;
+var SCROLL_RIGHT = 3;
+var appView = new LiveAPI();
+var songView3 = new LiveAPI();
+var track2 = new LiveAPI();
+var device = new LiveAPI();
+var parent = new LiveAPI();
+var param = new LiveAPI();
+var INSTRUMENT_TYPE = 1;
+var INSTRUMENT_NAMES = /* @__PURE__ */ new Set([
+  NATIVE_DEVICES.ana,
+  NATIVE_DEVICES.colis,
+  NATIVE_DEVICES.dri,
+  NATIVE_DEVICES.drumr,
+  NATIVE_DEVICES.elec,
+  NATIVE_DEVICES.exti,
+  NATIVE_DEVICES.imp,
+  NATIVE_DEVICES.irack,
+  NATIVE_DEVICES.meld,
+  NATIVE_DEVICES.op,
+  NATIVE_DEVICES.samp,
+  NATIVE_DEVICES.simp,
+  NATIVE_DEVICES.ten,
+  NATIVE_DEVICES.wav
+]);
+function liveValue5(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function liveId2(raw) {
+  const items = raw instanceof Array ? raw : raw == null || raw === "" ? [] : [raw];
+  for (const item of items) {
+    if (typeof item === "string" && item !== "" && Number.isNaN(Number(item))) {
+      continue;
+    }
+    const n = Number(item);
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return 0;
+}
+function currentChain() {
+  track2.path = "live_set view selected_track";
+  if (!track2.id || track2.id == 0) {
+    return null;
+  }
+  device.path = track2.path + " view selected_device";
+  if (device.id && device.id != 0) {
+    const id = liveId2(device.get("canonical_parent"));
+    if (id) {
+      parent.id = id;
+      if (parent.type === "Chain" || parent.type === "DrumChain") {
+        return parent;
+      }
+    }
+  }
+  return track2;
+}
+function findInstrumentIndex(chain) {
+  const n = chain.getcount("devices");
+  for (let i = 0; i < n; i++) {
+    device.path = chain.path + " devices " + i;
+    if (!device.id || device.id == 0) {
+      continue;
+    }
+    const kind = liveValue5(device.get("type"));
+    if (kind == INSTRUMENT_TYPE || kind === "instrument") {
+      return i;
+    }
+  }
+  return -1;
+}
+function selectInserted(chain, index, scrollEnd) {
+  device.path = chain.path + " devices " + index;
+  if (!device.id || device.id == 0) {
+    return;
+  }
+  const id = device.id;
+  appView.path = "live_app view";
+  appView.call("focus_view", "Detail/DeviceChain");
+  songView3.path = "live_set view";
+  songView3.call("select_device", "id", id);
+  if (!scrollEnd) {
+    return;
+  }
+  for (let i = 0; i < SCROLL_PAGES; i++) {
+    appView.call("scroll_view", SCROLL_RIGHT, "Detail/DeviceChain", 0);
+  }
+  songView3.call("select_device", "id", id);
+}
+function insertAtChainEnd(name) {
+  const chain = currentChain();
+  if (!chain) {
+    return false;
+  }
+  let index = -1;
+  let scrollEnd = true;
+  try {
+    if (INSTRUMENT_NAMES.has(name)) {
+      index = findInstrumentIndex(chain);
+      if (index >= 0) {
+        chain.call("delete_device", index);
+        chain.call("insert_device", name, index);
+        scrollEnd = false;
+      } else {
+        chain.call("insert_device", name);
+      }
+    } else {
+      chain.call("insert_device", name);
+    }
+  } catch {
+    return false;
+  }
+  const n = chain.getcount("devices");
+  if (n < 1) {
+    return false;
+  }
+  if (index < 0) {
+    index = n - 1;
+  }
+  selectInserted(chain, index, scrollEnd);
+  return !!(device.id && device.id != 0);
+}
+function ana() {
+  insertAtChainEnd(NATIVE_DEVICES.ana);
+}
+function colis() {
+  insertAtChainEnd(NATIVE_DEVICES.colis);
+}
+function dri() {
+  insertAtChainEnd(NATIVE_DEVICES.dri);
+}
+function drumr() {
+  insertAtChainEnd(NATIVE_DEVICES.drumr);
+}
+function elec() {
+  insertAtChainEnd(NATIVE_DEVICES.elec);
+}
+function exti() {
+  insertAtChainEnd(NATIVE_DEVICES.exti);
+}
+function imp() {
+  insertAtChainEnd(NATIVE_DEVICES.imp);
+}
+function irack() {
+  insertAtChainEnd(NATIVE_DEVICES.irack);
+}
+function meld() {
+  insertAtChainEnd(NATIVE_DEVICES.meld);
+}
+function op() {
+  insertAtChainEnd(NATIVE_DEVICES.op);
+}
+function samp() {
+  insertAtChainEnd(NATIVE_DEVICES.samp);
+}
+function simp() {
+  insertAtChainEnd(NATIVE_DEVICES.simp);
+}
+function ten() {
+  insertAtChainEnd(NATIVE_DEVICES.ten);
+}
+function wav() {
+  insertAtChainEnd(NATIVE_DEVICES.wav);
+}
+function amp() {
+  insertAtChainEnd(NATIVE_DEVICES.amp);
+}
+function arack() {
+  insertAtChainEnd(NATIVE_DEVICES.arack);
+}
+function af() {
+  insertAtChainEnd(NATIVE_DEVICES.af);
+}
+function apan() {
+  insertAtChainEnd(NATIVE_DEVICES.apan);
+}
+function ash() {
+  insertAtChainEnd(NATIVE_DEVICES.ash);
+}
+function beat() {
+  insertAtChainEnd(NATIVE_DEVICES.beat);
+}
+function cab() {
+  insertAtChainEnd(NATIVE_DEVICES.cab);
+}
+function cheq() {
+  insertAtChainEnd(NATIVE_DEVICES.cheq);
+}
+function ens() {
+  insertAtChainEnd(NATIVE_DEVICES.ens);
+}
+function comp() {
+  insertAtChainEnd(NATIVE_DEVICES.comp);
+}
+function corp() {
+  insertAtChainEnd(NATIVE_DEVICES.corp);
+}
+function del() {
+  insertAtChainEnd(NATIVE_DEVICES.del);
+}
+function drumb() {
+  insertAtChainEnd(NATIVE_DEVICES.drumb);
+}
+function tube() {
+  insertAtChainEnd(NATIVE_DEVICES.tube);
+}
+function echo() {
+  insertAtChainEnd(NATIVE_DEVICES.echo);
+}
+var EQ8_LOW_CUT_12 = 1;
+var EQ8_NOTCH = 4;
+var EQ8_HIGH_CUT_12 = 6;
+var EQ8_HIGHPASS_HZ = 130;
+var EQ8_LOWPASS_HZ = 1e4;
+var EQ8_FREQ_MIN_HZ = 10;
+var EQ8_FREQ_MAX_HZ = 22e3;
+function eq8ParamPaths() {
+  const paths = {};
+  const path = device.path;
+  const n = device.getcount("parameters");
+  for (let i = 0; i < n; i++) {
+    param.path = path + " parameters " + i;
+    if (!param.id || param.id == 0) {
+      continue;
+    }
+    const name = liveValue5(param.get("name"));
+    if (typeof name === "string" && name !== "") {
+      paths[name] = param.path;
+    }
+  }
+  return paths;
+}
+function setEq8Param(path, value) {
+  if (!path) {
+    return;
+  }
+  param.path = path;
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set("value", value);
+}
+function hzToEq8Value(hz) {
+  const min = Number(liveValue5(param.get("min")));
+  const max = Number(liveValue5(param.get("max")));
+  if (Number.isFinite(min) && Number.isFinite(max) && max > 1.5) {
+    return Math.max(min, Math.min(max, hz));
+  }
+  const t = Math.log(hz / EQ8_FREQ_MIN_HZ) / Math.log(EQ8_FREQ_MAX_HZ / EQ8_FREQ_MIN_HZ);
+  return Math.max(0, Math.min(1, t));
+}
+function setEq8Freq(path, hz) {
+  if (!path) {
+    return;
+  }
+  param.path = path;
+  if (!param.id || param.id == 0) {
+    return;
+  }
+  param.set("value", hzToEq8Value(hz));
+}
+function configureEq8(bands) {
+  if (!device.id || device.id == 0) {
+    return;
+  }
+  const paths = eq8ParamPaths();
+  for (const band2 of bands) {
+    for (const side of ["A", "B"]) {
+      setEq8Param(paths[band2.band + " Filter On " + side], 1);
+      setEq8Param(paths[band2.band + " Filter Type " + side], band2.type);
+      if (band2.freq != null) {
+        setEq8Freq(paths[band2.band + " Frequency " + side], band2.freq);
+      }
+    }
+  }
+}
+function insertEq8Preset(bands) {
+  if (!insertAtChainEnd(NATIVE_DEVICES.eq8)) {
+    return;
+  }
+  configureEq8(bands);
+}
+function eq8() {
+  insertAtChainEnd(NATIVE_DEVICES.eq8);
+}
+function low() {
+  insertEq8Preset([{ band: 4, type: EQ8_HIGH_CUT_12, freq: EQ8_LOWPASS_HZ }]);
+}
+function high() {
+  insertEq8Preset([{ band: 1, type: EQ8_LOW_CUT_12, freq: EQ8_HIGHPASS_HZ }]);
+}
+function notch() {
+  insertEq8Preset([{ band: 2, type: EQ8_NOTCH }]);
+}
+function band() {
+  insertEq8Preset([
+    { band: 1, type: EQ8_LOW_CUT_12, freq: EQ8_HIGHPASS_HZ },
+    { band: 4, type: EQ8_HIGH_CUT_12, freq: EQ8_LOWPASS_HZ }
+  ]);
+}
+function eq3() {
+  insertAtChainEnd(NATIVE_DEVICES.eq3);
+}
+function eros() {
+  insertAtChainEnd(NATIVE_DEVICES.eros);
+}
+function exta() {
+  insertAtChainEnd(NATIVE_DEVICES.exta);
+}
+function fdel() {
+  insertAtChainEnd(NATIVE_DEVICES.fdel);
+}
+function gate() {
+  insertAtChainEnd(NATIVE_DEVICES.gate);
+}
+function glue() {
+  insertAtChainEnd(NATIVE_DEVICES.glue);
+}
+function grain() {
+  insertAtChainEnd(NATIVE_DEVICES.grain);
+}
+function hyb() {
+  insertAtChainEnd(NATIVE_DEVICES.hyb);
+}
+function lim() {
+  insertAtChainEnd(NATIVE_DEVICES.lim);
+}
+function loop() {
+  insertAtChainEnd(NATIVE_DEVICES.loop);
+}
+function mbd() {
+  insertAtChainEnd(NATIVE_DEVICES.mbd);
+}
+function od() {
+  insertAtChainEnd(NATIVE_DEVICES.od);
+}
+function ped() {
+  insertAtChainEnd(NATIVE_DEVICES.ped);
+}
+function phas() {
+  insertAtChainEnd(NATIVE_DEVICES.phas);
+}
+function red() {
+  insertAtChainEnd(NATIVE_DEVICES.red);
+}
+function reso() {
+  insertAtChainEnd(NATIVE_DEVICES.reso);
+}
+function verb() {
+  insertAtChainEnd(NATIVE_DEVICES.verb);
+}
+function roar() {
+  insertAtChainEnd(NATIVE_DEVICES.roar);
+}
+function sat() {
+  insertAtChainEnd(NATIVE_DEVICES.sat);
+}
+function shif() {
+  insertAtChainEnd(NATIVE_DEVICES.shif);
+}
+function sres() {
+  insertAtChainEnd(NATIVE_DEVICES.sres);
+}
+function stime() {
+  insertAtChainEnd(NATIVE_DEVICES.stime);
+}
+function spec() {
+  insertAtChainEnd(NATIVE_DEVICES.spec);
+}
+function tun() {
+  insertAtChainEnd(NATIVE_DEVICES.tun);
+}
+function ut() {
+  insertAtChainEnd(NATIVE_DEVICES.ut);
+}
+function vin() {
+  insertAtChainEnd(NATIVE_DEVICES.vin);
+}
+function voc() {
+  insertAtChainEnd(NATIVE_DEVICES.voc);
+}
+function arp() {
+  insertAtChainEnd(NATIVE_DEVICES.arp);
+}
+function cc() {
+  insertAtChainEnd(NATIVE_DEVICES.cc);
+}
+function chordmidi() {
+  insertAtChainEnd(NATIVE_DEVICES.chordmidi);
+}
+function mrack() {
+  insertAtChainEnd(NATIVE_DEVICES.mrack);
+}
+function nlen() {
+  insertAtChainEnd(NATIVE_DEVICES.nlen);
+}
+function pit() {
+  insertAtChainEnd(NATIVE_DEVICES.pit);
+}
+function rand() {
+  insertAtChainEnd(NATIVE_DEVICES.rand);
+}
+function sca() {
+  insertAtChainEnd(NATIVE_DEVICES.sca);
+}
+function vel() {
+  insertAtChainEnd(NATIVE_DEVICES.vel);
 }
 
 // src/actions/midiClip.ts
