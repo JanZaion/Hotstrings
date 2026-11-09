@@ -101,9 +101,40 @@ function displayHotkey(key: string) {
   return key.replaceAll('^', 'Ctrl+').replaceAll('!', 'Alt+').replaceAll('#', 'Win+');
 }
 
+const CHORD_QUALITY: Record<string, string> = {
+  major: 'Major',
+  minor: 'Minor',
+  dim: 'Diminished',
+  aug: 'Augmented',
+};
+
+const FIXED_CHORD_DESC: Record<string, string> = {
+  sus2: 'Suspended 2nd chord',
+  sus4: 'Suspended 4th chord',
+  pow: 'Power chord, root and fifth',
+};
+
+function fixedChordDesc(key: string) {
+  if (FIXED_CHORD_DESC[key]) {
+    return FIXED_CHORD_DESC[key];
+  }
+  const match = /^([a-z]+?)(\d*)$/.exec(key);
+  const quality = match ? CHORD_QUALITY[match[1]] : undefined;
+  if (!match || !quality) {
+    return undefined;
+  }
+  return match[2] ? `${quality} ${match[2]}th chord` : `${quality} triad`;
+}
+
 function itemDesc(key: string, bind: string) {
   if (HOTSTRING_DESC[key]) {
     return HOTSTRING_DESC[key];
+  }
+  if (key in FIXED_CHORDS) {
+    const desc = fixedChordDesc(key);
+    if (desc) {
+      return desc;
+    }
   }
   if (key in NATIVE_DEVICES) {
     return NATIVE_DEVICES[key as keyof typeof NATIVE_DEVICES];

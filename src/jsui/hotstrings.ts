@@ -10,38 +10,35 @@ mgraphics.autofill = 0;
 
 type RGB = [number, number, number];
 
-const BG: RGB = [0.09, 0.088, 0.085];
-const INK: RGB = [0.93, 0.91, 0.86];
-const MUTED: RGB = [0.56, 0.54, 0.5];
-const AMBER: RGB = [0.86, 0.52, 0.16];
-const CAP_TOP: RGB = [0.27, 0.262, 0.248];
-const CAP_BOTTOM: RGB = [0.2, 0.195, 0.186];
-const SKIRT: RGB = [0.045, 0.043, 0.041];
-const PRESSED_TOP: RGB = [0.97, 0.64, 0.27];
-const PRESSED_BOTTOM: RGB = [0.84, 0.49, 0.14];
-const PRESSED_INK: RGB = [0.13, 0.09, 0.05];
+const BG: RGB = [0.106, 0.106, 0.118];
+const TEXT: RGB = [0.93, 0.93, 0.95];
+const SUBTLE: RGB = [0.56, 0.56, 0.6];
+const FAINT: RGB = [0.38, 0.38, 0.42];
+const ACCENT: RGB = [0.49, 0.54, 0.98];
+const ACCENT_TEXT: RGB = [0.78, 0.8, 1];
 
-const TOP = 68;
-const PAD_X = 16;
-const GROUP_H = 36;
-const ITEM_H = 28;
-const LIST_PAD_BOTTOM = 18;
-const CAP_H = 18;
-const CAP_DEPTH = 3;
-const CAP_R = 4;
-const CAP_PAD = 7;
-const CAP_MIN_W = 22;
-const CAP_FONT = 10;
-const PLUS_W = 13;
-const DESC_GAP = 16;
-const FADE_TOP = 16;
-const FADE_BOTTOM = 22;
-const SB_W = 5;
-const SB_PAD = 5;
+const IS_WINDOWS = max.os === 'windows';
+const UI_FONT = IS_WINDOWS ? 'Segoe UI' : 'Helvetica Neue';
+const UI_FONT_MEDIUM = IS_WINDOWS ? 'Segoe UI Semibold' : 'Helvetica Neue Medium';
+
+const TOP = 62;
+const PAD_X = 10;
+const ROW_INSET = 10;
+const GROUP_H = 34;
+const ITEM_H = 32;
+const LIST_PAD_BOTTOM = 10;
+const PILL_H = 20;
+const PILL_PAD = 7;
+const PILL_MIN_W = 20;
+const PILL_GAP = 4;
+const PILL_FONT = 11;
+const FADE_H = 12;
+const SB_W = 8;
+const SB_PAD = 4;
 
 type DrawRow =
   | { kind: 'group'; title: string; count: number; h: number }
-  | { kind: 'item'; caps: string[]; desc: string; h: number };
+  | { kind: 'item'; keys: string[]; desc: string; h: number };
 
 const rows = buildRows();
 const contentH = rows.reduce((sum, row) => sum + row.h, 0) + LIST_PAD_BOTTOM;
@@ -55,7 +52,6 @@ let draggingThumb = false;
 let hoverRow = -1;
 let mouseX = -1;
 let mouseY = -1;
-let keyColW = 0;
 
 function buildRows() {
   const out: DrawRow[] = [];
@@ -65,7 +61,7 @@ function buildRows() {
     for (const item of section.items) {
       out.push({
         kind: 'item',
-        caps: combos ? item.key.split('+') : [item.key],
+        keys: combos ? item.key.split('+') : [item.key],
         desc: item.desc,
         h: ITEM_H,
       });
@@ -109,39 +105,36 @@ function sbGeom() {
   const trackH = listH();
   const x = viewW() - SB_PAD - SB_W;
   const y = TOP + 4;
-  const body = Math.max(0, trackH - 12);
-  const thumbH = Math.max(24, body * (trackH / Math.max(trackH, contentH)));
+  const body = Math.max(0, trackH - 8);
+  const thumbH = Math.max(28, body * (trackH / Math.max(trackH, contentH)));
   const travel = Math.max(0, body - thumbH);
   const thumbY = y + (maxScroll() === 0 ? 0 : (scrollY / maxScroll()) * travel);
   return { x, y, body, thumbH, thumbY, travel };
+}
+
+function rowRight() {
+  return viewW() - SB_PAD * 2 - SB_W - 2;
 }
 
 function fill(rgb: RGB, a = 1) {
   mgraphics.set_source_rgba(rgb[0], rgb[1], rgb[2], a);
 }
 
-function font(size: number, bold: boolean) {
-  mgraphics.select_font_face(bold ? 'Arial Bold' : 'Arial');
+function font(face: string, size: number) {
+  mgraphics.select_font_face(face);
   mgraphics.set_font_size(size);
 }
 
-function textAt(x: number, y: number, size: number, bold: boolean, rgb: RGB, text: string) {
-  font(size, bold);
+function measure(face: string, size: number, text: string) {
+  font(face, size);
+  return mgraphics.text_measure(text)[0];
+}
+
+function textAt(x: number, y: number, face: string, size: number, rgb: RGB, text: string) {
+  font(face, size);
   fill(rgb);
   mgraphics.move_to(x, y);
   mgraphics.show_text(text);
-}
-
-function trackedText(x: number, y: number, size: number, rgb: RGB, text: string, tracking: number) {
-  font(size, true);
-  fill(rgb);
-  let cx = x;
-  for (const ch of text) {
-    mgraphics.move_to(cx, y);
-    mgraphics.show_text(ch);
-    cx += mgraphics.text_measure(ch)[0] + tracking;
-  }
-  return cx - x;
 }
 
 function ellipsize(text: string, maxW: number) {
@@ -155,123 +148,68 @@ function ellipsize(text: string, maxW: number) {
   return `${s}…`;
 }
 
-function verticalGradient(y0: number, y1: number, top: RGB, bottom: RGB, a0 = 1, a1 = 1) {
-  const g = mgraphics.pattern_create_linear(0, y0, 0, y1);
-  g.add_color_stop_rgba(0, top[0], top[1], top[2], a0);
-  g.add_color_stop_rgba(1, bottom[0], bottom[1], bottom[2], a1);
-  mgraphics.set_source(g);
+function roundRect(x: number, y: number, w: number, h: number, r: number) {
+  mgraphics.rectangle_rounded(x, y, w, h, r * 2, r * 2);
 }
 
-function capWidth(label: string) {
-  font(CAP_FONT, true);
-  return Math.max(CAP_MIN_W, Math.ceil(mgraphics.text_measure(label)[0]) + CAP_PAD * 2);
+function baselineIn(y: number, h: number, size: number) {
+  return y + (h + size * 0.7) / 2;
 }
 
-function comboWidth(caps: string[]) {
-  return caps.reduce((sum, cap) => sum + capWidth(cap), 0) + (caps.length - 1) * PLUS_W;
+function pillWidth(key: string) {
+  return Math.max(PILL_MIN_W, Math.ceil(measure(UI_FONT_MEDIUM, PILL_FONT, key)) + PILL_PAD * 2);
 }
 
-function capBaseline(capY: number) {
-  return capY + (CAP_H + CAP_FONT * 0.72) / 2;
+function pillsWidth(keys: string[]) {
+  return keys.reduce((sum, key) => sum + pillWidth(key), 0) + (keys.length - 1) * PILL_GAP;
 }
 
-function drawKeycap(x: number, y: number, label: string, pressed: boolean) {
-  const w = capWidth(label);
-  const faceY = pressed ? y + CAP_DEPTH - 1 : y;
-
-  fill(SKIRT);
-  mgraphics.rectangle_rounded(x, y + CAP_DEPTH, w, CAP_H, CAP_R * 2, CAP_R * 2);
-  mgraphics.fill();
-
-  verticalGradient(
-    faceY,
-    faceY + CAP_H,
-    pressed ? PRESSED_TOP : CAP_TOP,
-    pressed ? PRESSED_BOTTOM : CAP_BOTTOM
-  );
-  mgraphics.rectangle_rounded(x, faceY, w, CAP_H, CAP_R * 2, CAP_R * 2);
-  mgraphics.fill();
-
-  mgraphics.set_source_rgba(1, 1, 1, pressed ? 0.35 : 0.13);
-  mgraphics.set_line_width(1);
-  mgraphics.move_to(x + CAP_R, faceY + 0.5);
-  mgraphics.line_to(x + w - CAP_R, faceY + 0.5);
-  mgraphics.stroke();
-
-  font(CAP_FONT, true);
-  const tw = mgraphics.text_measure(label)[0];
-  textAt(x + (w - tw) / 2, capBaseline(faceY), CAP_FONT, true, pressed ? PRESSED_INK : INK, label);
-  return w;
-}
-
-function drawKeyCombo(x: number, y: number, caps: string[], pressed: boolean) {
-  let cx = x;
-  caps.forEach((cap, i) => {
-    if (i > 0) {
-      font(CAP_FONT, true);
-      const pw = mgraphics.text_measure('+')[0];
-      textAt(cx + (PLUS_W - pw) / 2, capBaseline(y), CAP_FONT, true, MUTED, '+');
-      cx += PLUS_W;
-    }
-    cx += drawKeycap(cx, y, cap, pressed);
-  });
-}
-
-function measureKeyColumn() {
-  let max = 0;
-  for (const row of rows) {
-    if (row.kind === 'item') {
-      max = Math.max(max, comboWidth(row.caps));
-    }
+function drawPills(right: number, y: number, keys: string[], active: boolean) {
+  let x = right - pillsWidth(keys);
+  for (const key of keys) {
+    const w = pillWidth(key);
+    fill(active ? ACCENT : [1, 1, 1], active ? 0.22 : 0.07);
+    roundRect(x, y, w, PILL_H, 5);
+    mgraphics.fill();
+    const tw = measure(UI_FONT_MEDIUM, PILL_FONT, key);
+    textAt(
+      x + (w - tw) / 2,
+      baselineIn(y, PILL_H, PILL_FONT),
+      UI_FONT_MEDIUM,
+      PILL_FONT,
+      active ? ACCENT_TEXT : SUBTLE,
+      key
+    );
+    x += w + PILL_GAP;
   }
-  keyColW = max;
-}
-
-function contentRight() {
-  return viewW() - SB_PAD * 2 - SB_W - 4;
 }
 
 function drawGroup(y: number, row: Extract<DrawRow, { kind: 'group' }>) {
-  const baseline = y + 25;
-  const titleW = trackedText(PAD_X, baseline, 9, AMBER, row.title.toUpperCase(), 1.4);
-  const countX = PAD_X + titleW + 6;
-  textAt(countX, baseline, 9, false, MUTED, String(row.count));
-  font(9, false);
-  const ruleX = countX + mgraphics.text_measure(String(row.count))[0] + 10;
-  const ruleRight = contentRight();
-  if (ruleRight > ruleX) {
-    mgraphics.set_source_rgba(1, 1, 1, 0.08);
-    mgraphics.set_line_width(1);
-    mgraphics.move_to(ruleX, baseline - 3.5);
-    mgraphics.line_to(ruleRight, baseline - 3.5);
-    mgraphics.stroke();
-  }
+  const baseline = y + GROUP_H - 10;
+  const x = PAD_X + ROW_INSET;
+  textAt(x, baseline, UI_FONT_MEDIUM, 11, SUBTLE, row.title);
+  const count = String(row.count);
+  const cw = measure(UI_FONT, 11, count);
+  textAt(rowRight() - ROW_INSET - cw, baseline, UI_FONT, 11, FAINT, count);
 }
 
 function drawItem(y: number, row: Extract<DrawRow, { kind: 'item' }>, hovered: boolean) {
-  const w = viewW();
+  const left = PAD_X;
+  const right = rowRight();
   if (hovered) {
-    fill(AMBER, 0.07);
-    mgraphics.rectangle(0, y, w, row.h);
-    mgraphics.fill();
-    fill(AMBER);
-    mgraphics.rectangle(0, y + 5, 2, row.h - 10);
+    fill([1, 1, 1], 0.06);
+    roundRect(left, y + 1, right - left, row.h - 2, 7);
     mgraphics.fill();
   }
-  const capY = y + Math.floor((row.h - CAP_H - CAP_DEPTH) / 2);
-  drawKeyCombo(PAD_X, capY, row.caps, hovered);
 
-  const descX = PAD_X + keyColW + DESC_GAP;
-  const descW = contentRight() - descX;
-  font(10, false);
-  textAt(
-    descX,
-    capBaseline(capY) + 0.5,
-    10,
-    false,
-    hovered ? INK : MUTED,
-    ellipsize(row.desc, descW)
-  );
+  const pillsRight = right - ROW_INSET;
+  drawPills(pillsRight, y + (row.h - PILL_H) / 2, row.keys, hovered);
+
+  const textX = left + ROW_INSET;
+  const textW = pillsRight - pillsWidth(row.keys) - 16 - textX;
+  font(UI_FONT, 13);
+  const desc = ellipsize(row.desc, textW);
+  textAt(textX, baselineIn(y, row.h, 13), UI_FONT, 13, TEXT, desc);
 }
 
 function drawHeader() {
@@ -280,36 +218,22 @@ function drawHeader() {
   mgraphics.rectangle(0, 0, w, TOP);
   mgraphics.fill();
 
-  trackedText(PAD_X, 22, 8, AMBER, 'KEYBOARD WARRIOR', 2);
-  textAt(PAD_X, 46, 20, true, INK, 'Hotstrings');
+  const x = PAD_X + ROW_INSET;
+  textAt(x, 30, UI_FONT_MEDIUM, 16, TEXT, 'Hotstrings');
+  textAt(x, 48, UI_FONT, 12, SUBTLE, `${itemCount} commands`);
 
-  const label = String(itemCount);
-  const badgeW = capWidth(label);
-  const badgeX = contentRight() - badgeW;
-  const badgeY = 31;
-  drawKeycap(badgeX, badgeY, label, false);
-  font(9, false);
-  const caption = 'commands';
-  const cw = mgraphics.text_measure(caption)[0];
-  textAt(badgeX - cw - 8, capBaseline(badgeY), 9, false, MUTED, caption);
-
-  if (scrollY > 0) {
-    mgraphics.set_source_rgba(1, 1, 1, 0.06);
-    mgraphics.set_line_width(1);
-    mgraphics.move_to(0, TOP - 0.5);
-    mgraphics.line_to(w, TOP - 0.5);
-    mgraphics.stroke();
-  }
+  fill([1, 1, 1], 0.07);
+  mgraphics.rectangle(0, TOP - 1, w, 1);
+  mgraphics.fill();
 }
 
-function drawFades() {
+function drawFade() {
   const w = viewW();
-  const h = viewH();
-  verticalGradient(TOP, TOP + FADE_TOP, BG, BG, 1, 0);
-  mgraphics.rectangle(0, TOP, w, FADE_TOP);
-  mgraphics.fill();
-  verticalGradient(h - FADE_BOTTOM, h, BG, BG, 0, 1);
-  mgraphics.rectangle(0, h - FADE_BOTTOM, w, FADE_BOTTOM);
+  const g = mgraphics.pattern_create_linear(0, TOP, 0, TOP + FADE_H);
+  g.add_color_stop_rgba(0, BG[0], BG[1], BG[2], 1);
+  g.add_color_stop_rgba(1, BG[0], BG[1], BG[2], 0);
+  mgraphics.set_source(g);
+  mgraphics.rectangle(0, TOP, w, FADE_H);
   mgraphics.fill();
 }
 
@@ -318,18 +242,12 @@ function drawScrollbar() {
     return;
   }
   const sb = sbGeom();
-  mgraphics.set_source_rgba(1, 1, 1, 0.05);
-  mgraphics.rectangle_rounded(sb.x, sb.y, SB_W, sb.body, SB_W, SB_W);
-  mgraphics.fill();
-  fill(draggingThumb ? PRESSED_TOP : AMBER, draggingThumb ? 1 : 0.8);
-  mgraphics.rectangle_rounded(sb.x, sb.thumbY, SB_W, sb.thumbH, SB_W, SB_W);
+  fill([1, 1, 1], draggingThumb ? 0.32 : 0.16);
+  roundRect(sb.x, sb.thumbY, SB_W, sb.thumbH, SB_W / 2);
   mgraphics.fill();
 }
 
 function paint() {
-  if (keyColW === 0) {
-    measureKeyColumn();
-  }
   const w = viewW();
   const h = viewH();
   fill(BG);
@@ -349,7 +267,9 @@ function paint() {
     y = next;
   });
 
-  drawFades();
+  if (scrollY > 0) {
+    drawFade();
+  }
   drawHeader();
   drawScrollbar();
 }
@@ -454,7 +374,7 @@ function onwheel(
   mouseY = y;
   let dy = scrolly;
   if (Math.abs(dy) <= 1) {
-    dy *= ITEM_H * 8;
+    dy *= ITEM_H * 6;
   } else if (Math.abs(dy) < 8) {
     dy *= 48;
   }

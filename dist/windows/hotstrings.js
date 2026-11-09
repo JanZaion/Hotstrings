@@ -335,9 +335,37 @@ var EQ_KEYS = ["eq", "low", "high", "notch", "band"];
 function displayHotkey(key) {
   return key.replaceAll("^", "Ctrl+").replaceAll("!", "Alt+").replaceAll("#", "Win+");
 }
+var CHORD_QUALITY = {
+  major: "Major",
+  minor: "Minor",
+  dim: "Diminished",
+  aug: "Augmented"
+};
+var FIXED_CHORD_DESC = {
+  sus2: "Suspended 2nd chord",
+  sus4: "Suspended 4th chord",
+  pow: "Power chord, root and fifth"
+};
+function fixedChordDesc(key) {
+  if (FIXED_CHORD_DESC[key]) {
+    return FIXED_CHORD_DESC[key];
+  }
+  const match = /^([a-z]+?)(\d*)$/.exec(key);
+  const quality = match ? CHORD_QUALITY[match[1]] : void 0;
+  if (!match || !quality) {
+    return void 0;
+  }
+  return match[2] ? `${quality} ${match[2]}th chord` : `${quality} triad`;
+}
 function itemDesc(key, bind) {
   if (HOTSTRING_DESC[key]) {
     return HOTSTRING_DESC[key];
+  }
+  if (key in FIXED_CHORDS) {
+    const desc = fixedChordDesc(key);
+    if (desc) {
+      return desc;
+    }
   }
   if (key in NATIVE_DEVICES) {
     return NATIVE_DEVICES[key];
@@ -405,33 +433,29 @@ outlets = 0;
 mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
-var BG = [0.09, 0.088, 0.085];
-var INK = [0.93, 0.91, 0.86];
-var MUTED = [0.56, 0.54, 0.5];
-var AMBER = [0.86, 0.52, 0.16];
-var CAP_TOP = [0.27, 0.262, 0.248];
-var CAP_BOTTOM = [0.2, 0.195, 0.186];
-var SKIRT = [0.045, 0.043, 0.041];
-var PRESSED_TOP = [0.97, 0.64, 0.27];
-var PRESSED_BOTTOM = [0.84, 0.49, 0.14];
-var PRESSED_INK = [0.13, 0.09, 0.05];
-var TOP = 68;
-var PAD_X = 16;
-var GROUP_H = 36;
-var ITEM_H = 28;
-var LIST_PAD_BOTTOM = 18;
-var CAP_H = 18;
-var CAP_DEPTH = 3;
-var CAP_R = 4;
-var CAP_PAD = 7;
-var CAP_MIN_W = 22;
-var CAP_FONT = 10;
-var PLUS_W = 13;
-var DESC_GAP = 16;
-var FADE_TOP = 16;
-var FADE_BOTTOM = 22;
-var SB_W = 5;
-var SB_PAD = 5;
+var BG = [0.106, 0.106, 0.118];
+var TEXT = [0.93, 0.93, 0.95];
+var SUBTLE = [0.56, 0.56, 0.6];
+var FAINT = [0.38, 0.38, 0.42];
+var ACCENT = [0.49, 0.54, 0.98];
+var ACCENT_TEXT = [0.78, 0.8, 1];
+var IS_WINDOWS = max.os === "windows";
+var UI_FONT = IS_WINDOWS ? "Segoe UI" : "Helvetica Neue";
+var UI_FONT_MEDIUM = IS_WINDOWS ? "Segoe UI Semibold" : "Helvetica Neue Medium";
+var TOP = 62;
+var PAD_X = 10;
+var ROW_INSET = 10;
+var GROUP_H = 34;
+var ITEM_H = 32;
+var LIST_PAD_BOTTOM = 10;
+var PILL_H = 20;
+var PILL_PAD = 7;
+var PILL_MIN_W = 20;
+var PILL_GAP = 4;
+var PILL_FONT = 11;
+var FADE_H = 12;
+var SB_W = 8;
+var SB_PAD = 4;
 var rows = buildRows();
 var contentH = rows.reduce((sum, row) => sum + row.h, 0) + LIST_PAD_BOTTOM;
 var itemCount = rows.reduce((n, row) => n + (row.kind === "item" ? 1 : 0), 0);
@@ -443,7 +467,6 @@ var draggingThumb = false;
 var hoverRow = -1;
 var mouseX = -1;
 var mouseY = -1;
-var keyColW = 0;
 function buildRows() {
   const out = [];
   for (const section of hotstringSections()) {
@@ -452,7 +475,7 @@ function buildRows() {
     for (const item of section.items) {
       out.push({
         kind: "item",
-        caps: combos ? item.key.split("+") : [item.key],
+        keys: combos ? item.key.split("+") : [item.key],
         desc: item.desc,
         h: ITEM_H
       });
@@ -481,8 +504,8 @@ function maxScroll() {
   return Math.max(0, contentH - listH());
 }
 function setScroll(next) {
-  const max = maxScroll();
-  scrollY = Math.min(max, Math.max(0, next));
+  const max2 = maxScroll();
+  scrollY = Math.min(max2, Math.max(0, next));
   updateHover();
   mgraphics.redraw();
 }
@@ -490,35 +513,31 @@ function sbGeom() {
   const trackH = listH();
   const x = viewW() - SB_PAD - SB_W;
   const y = TOP + 4;
-  const body = Math.max(0, trackH - 12);
-  const thumbH = Math.max(24, body * (trackH / Math.max(trackH, contentH)));
+  const body = Math.max(0, trackH - 8);
+  const thumbH = Math.max(28, body * (trackH / Math.max(trackH, contentH)));
   const travel = Math.max(0, body - thumbH);
   const thumbY = y + (maxScroll() === 0 ? 0 : scrollY / maxScroll() * travel);
   return { x, y, body, thumbH, thumbY, travel };
 }
+function rowRight() {
+  return viewW() - SB_PAD * 2 - SB_W - 2;
+}
 function fill(rgb, a = 1) {
   mgraphics.set_source_rgba(rgb[0], rgb[1], rgb[2], a);
 }
-function font(size, bold) {
-  mgraphics.select_font_face(bold ? "Arial Bold" : "Arial");
+function font(face, size) {
+  mgraphics.select_font_face(face);
   mgraphics.set_font_size(size);
 }
-function textAt(x, y, size, bold, rgb, text) {
-  font(size, bold);
+function measure(face, size, text) {
+  font(face, size);
+  return mgraphics.text_measure(text)[0];
+}
+function textAt(x, y, face, size, rgb, text) {
+  font(face, size);
   fill(rgb);
   mgraphics.move_to(x, y);
   mgraphics.show_text(text);
-}
-function trackedText(x, y, size, rgb, text, tracking) {
-  font(size, true);
-  fill(rgb);
-  let cx = x;
-  for (const ch of text) {
-    mgraphics.move_to(cx, y);
-    mgraphics.show_text(ch);
-    cx += mgraphics.text_measure(ch)[0] + tracking;
-  }
-  return cx - x;
 }
 function ellipsize(text, maxW) {
   if (mgraphics.text_measure(text)[0] <= maxW) {
@@ -530,142 +549,80 @@ function ellipsize(text, maxW) {
   }
   return `${s}\u2026`;
 }
-function verticalGradient(y0, y1, top, bottom, a0 = 1, a1 = 1) {
-  const g = mgraphics.pattern_create_linear(0, y0, 0, y1);
-  g.add_color_stop_rgba(0, top[0], top[1], top[2], a0);
-  g.add_color_stop_rgba(1, bottom[0], bottom[1], bottom[2], a1);
-  mgraphics.set_source(g);
+function roundRect(x, y, w, h, r) {
+  mgraphics.rectangle_rounded(x, y, w, h, r * 2, r * 2);
 }
-function capWidth(label) {
-  font(CAP_FONT, true);
-  return Math.max(CAP_MIN_W, Math.ceil(mgraphics.text_measure(label)[0]) + CAP_PAD * 2);
+function baselineIn(y, h, size) {
+  return y + (h + size * 0.7) / 2;
 }
-function comboWidth(caps) {
-  return caps.reduce((sum, cap) => sum + capWidth(cap), 0) + (caps.length - 1) * PLUS_W;
+function pillWidth(key) {
+  return Math.max(PILL_MIN_W, Math.ceil(measure(UI_FONT_MEDIUM, PILL_FONT, key)) + PILL_PAD * 2);
 }
-function capBaseline(capY) {
-  return capY + (CAP_H + CAP_FONT * 0.72) / 2;
+function pillsWidth(keys) {
+  return keys.reduce((sum, key) => sum + pillWidth(key), 0) + (keys.length - 1) * PILL_GAP;
 }
-function drawKeycap(x, y, label, pressed) {
-  const w = capWidth(label);
-  const faceY = pressed ? y + CAP_DEPTH - 1 : y;
-  fill(SKIRT);
-  mgraphics.rectangle_rounded(x, y + CAP_DEPTH, w, CAP_H, CAP_R * 2, CAP_R * 2);
-  mgraphics.fill();
-  verticalGradient(
-    faceY,
-    faceY + CAP_H,
-    pressed ? PRESSED_TOP : CAP_TOP,
-    pressed ? PRESSED_BOTTOM : CAP_BOTTOM
-  );
-  mgraphics.rectangle_rounded(x, faceY, w, CAP_H, CAP_R * 2, CAP_R * 2);
-  mgraphics.fill();
-  mgraphics.set_source_rgba(1, 1, 1, pressed ? 0.35 : 0.13);
-  mgraphics.set_line_width(1);
-  mgraphics.move_to(x + CAP_R, faceY + 0.5);
-  mgraphics.line_to(x + w - CAP_R, faceY + 0.5);
-  mgraphics.stroke();
-  font(CAP_FONT, true);
-  const tw = mgraphics.text_measure(label)[0];
-  textAt(x + (w - tw) / 2, capBaseline(faceY), CAP_FONT, true, pressed ? PRESSED_INK : INK, label);
-  return w;
-}
-function drawKeyCombo(x, y, caps, pressed) {
-  let cx = x;
-  caps.forEach((cap, i) => {
-    if (i > 0) {
-      font(CAP_FONT, true);
-      const pw = mgraphics.text_measure("+")[0];
-      textAt(cx + (PLUS_W - pw) / 2, capBaseline(y), CAP_FONT, true, MUTED, "+");
-      cx += PLUS_W;
-    }
-    cx += drawKeycap(cx, y, cap, pressed);
-  });
-}
-function measureKeyColumn() {
-  let max = 0;
-  for (const row of rows) {
-    if (row.kind === "item") {
-      max = Math.max(max, comboWidth(row.caps));
-    }
+function drawPills(right, y, keys, active) {
+  let x = right - pillsWidth(keys);
+  for (const key of keys) {
+    const w = pillWidth(key);
+    fill(active ? ACCENT : [1, 1, 1], active ? 0.22 : 0.07);
+    roundRect(x, y, w, PILL_H, 5);
+    mgraphics.fill();
+    const tw = measure(UI_FONT_MEDIUM, PILL_FONT, key);
+    textAt(
+      x + (w - tw) / 2,
+      baselineIn(y, PILL_H, PILL_FONT),
+      UI_FONT_MEDIUM,
+      PILL_FONT,
+      active ? ACCENT_TEXT : SUBTLE,
+      key
+    );
+    x += w + PILL_GAP;
   }
-  keyColW = max;
-}
-function contentRight() {
-  return viewW() - SB_PAD * 2 - SB_W - 4;
 }
 function drawGroup(y, row) {
-  const baseline = y + 25;
-  const titleW = trackedText(PAD_X, baseline, 9, AMBER, row.title.toUpperCase(), 1.4);
-  const countX = PAD_X + titleW + 6;
-  textAt(countX, baseline, 9, false, MUTED, String(row.count));
-  font(9, false);
-  const ruleX = countX + mgraphics.text_measure(String(row.count))[0] + 10;
-  const ruleRight = contentRight();
-  if (ruleRight > ruleX) {
-    mgraphics.set_source_rgba(1, 1, 1, 0.08);
-    mgraphics.set_line_width(1);
-    mgraphics.move_to(ruleX, baseline - 3.5);
-    mgraphics.line_to(ruleRight, baseline - 3.5);
-    mgraphics.stroke();
-  }
+  const baseline = y + GROUP_H - 10;
+  const x = PAD_X + ROW_INSET;
+  textAt(x, baseline, UI_FONT_MEDIUM, 11, SUBTLE, row.title);
+  const count = String(row.count);
+  const cw = measure(UI_FONT, 11, count);
+  textAt(rowRight() - ROW_INSET - cw, baseline, UI_FONT, 11, FAINT, count);
 }
 function drawItem(y, row, hovered) {
-  const w = viewW();
+  const left = PAD_X;
+  const right = rowRight();
   if (hovered) {
-    fill(AMBER, 0.07);
-    mgraphics.rectangle(0, y, w, row.h);
-    mgraphics.fill();
-    fill(AMBER);
-    mgraphics.rectangle(0, y + 5, 2, row.h - 10);
+    fill([1, 1, 1], 0.06);
+    roundRect(left, y + 1, right - left, row.h - 2, 7);
     mgraphics.fill();
   }
-  const capY = y + Math.floor((row.h - CAP_H - CAP_DEPTH) / 2);
-  drawKeyCombo(PAD_X, capY, row.caps, hovered);
-  const descX = PAD_X + keyColW + DESC_GAP;
-  const descW = contentRight() - descX;
-  font(10, false);
-  textAt(
-    descX,
-    capBaseline(capY) + 0.5,
-    10,
-    false,
-    hovered ? INK : MUTED,
-    ellipsize(row.desc, descW)
-  );
+  const pillsRight = right - ROW_INSET;
+  drawPills(pillsRight, y + (row.h - PILL_H) / 2, row.keys, hovered);
+  const textX = left + ROW_INSET;
+  const textW = pillsRight - pillsWidth(row.keys) - 16 - textX;
+  font(UI_FONT, 13);
+  const desc = ellipsize(row.desc, textW);
+  textAt(textX, baselineIn(y, row.h, 13), UI_FONT, 13, TEXT, desc);
 }
 function drawHeader() {
   const w = viewW();
   fill(BG);
   mgraphics.rectangle(0, 0, w, TOP);
   mgraphics.fill();
-  trackedText(PAD_X, 22, 8, AMBER, "KEYBOARD WARRIOR", 2);
-  textAt(PAD_X, 46, 20, true, INK, "Hotstrings");
-  const label = String(itemCount);
-  const badgeW = capWidth(label);
-  const badgeX = contentRight() - badgeW;
-  const badgeY = 31;
-  drawKeycap(badgeX, badgeY, label, false);
-  font(9, false);
-  const caption = "commands";
-  const cw = mgraphics.text_measure(caption)[0];
-  textAt(badgeX - cw - 8, capBaseline(badgeY), 9, false, MUTED, caption);
-  if (scrollY > 0) {
-    mgraphics.set_source_rgba(1, 1, 1, 0.06);
-    mgraphics.set_line_width(1);
-    mgraphics.move_to(0, TOP - 0.5);
-    mgraphics.line_to(w, TOP - 0.5);
-    mgraphics.stroke();
-  }
-}
-function drawFades() {
-  const w = viewW();
-  const h = viewH();
-  verticalGradient(TOP, TOP + FADE_TOP, BG, BG, 1, 0);
-  mgraphics.rectangle(0, TOP, w, FADE_TOP);
+  const x = PAD_X + ROW_INSET;
+  textAt(x, 30, UI_FONT_MEDIUM, 16, TEXT, "Hotstrings");
+  textAt(x, 48, UI_FONT, 12, SUBTLE, `${itemCount} commands`);
+  fill([1, 1, 1], 0.07);
+  mgraphics.rectangle(0, TOP - 1, w, 1);
   mgraphics.fill();
-  verticalGradient(h - FADE_BOTTOM, h, BG, BG, 0, 1);
-  mgraphics.rectangle(0, h - FADE_BOTTOM, w, FADE_BOTTOM);
+}
+function drawFade() {
+  const w = viewW();
+  const g = mgraphics.pattern_create_linear(0, TOP, 0, TOP + FADE_H);
+  g.add_color_stop_rgba(0, BG[0], BG[1], BG[2], 1);
+  g.add_color_stop_rgba(1, BG[0], BG[1], BG[2], 0);
+  mgraphics.set_source(g);
+  mgraphics.rectangle(0, TOP, w, FADE_H);
   mgraphics.fill();
 }
 function drawScrollbar() {
@@ -673,17 +630,11 @@ function drawScrollbar() {
     return;
   }
   const sb = sbGeom();
-  mgraphics.set_source_rgba(1, 1, 1, 0.05);
-  mgraphics.rectangle_rounded(sb.x, sb.y, SB_W, sb.body, SB_W, SB_W);
-  mgraphics.fill();
-  fill(draggingThumb ? PRESSED_TOP : AMBER, draggingThumb ? 1 : 0.8);
-  mgraphics.rectangle_rounded(sb.x, sb.thumbY, SB_W, sb.thumbH, SB_W, SB_W);
+  fill([1, 1, 1], draggingThumb ? 0.32 : 0.16);
+  roundRect(sb.x, sb.thumbY, SB_W, sb.thumbH, SB_W / 2);
   mgraphics.fill();
 }
 function paint() {
-  if (keyColW === 0) {
-    measureKeyColumn();
-  }
   const w = viewW();
   const h = viewH();
   fill(BG);
@@ -701,7 +652,9 @@ function paint() {
     }
     y = next;
   });
-  drawFades();
+  if (scrollY > 0) {
+    drawFade();
+  }
   drawHeader();
   drawScrollbar();
 }
@@ -789,7 +742,7 @@ function onwheel(x, y, _scrollx, scrolly, _mod1, shift) {
   mouseY = y;
   let dy = scrolly;
   if (Math.abs(dy) <= 1) {
-    dy *= ITEM_H * 8;
+    dy *= ITEM_H * 6;
   } else if (Math.abs(dy) < 8) {
     dy *= 48;
   }
