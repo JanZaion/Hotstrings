@@ -535,7 +535,7 @@ function paint() {
   mgraphics.rectangle(0, 0, w, TOP);
   mgraphics.fill();
   textAt(PAD_X, 20, 13, true, INK, "Hotstrings");
-  textAt(PAD_X, 36, 10, false, MUTED, `${itemCount} commands \xB7 initiator then the key`);
+  textAt(PAD_X, 36, 10, false, MUTED, `${itemCount} commands`);
   if (maxScroll() <= 0) {
     return;
   }
@@ -582,8 +582,16 @@ function ondrag(_x, y, button) {
     setScroll(dragScroll + (dragOrigin - y));
   }
 }
-function onwheel(_x, _y, delta) {
-  const dy = Math.abs(delta) < 5 ? delta * 28 : delta;
+function onwheel(_x, _y, _scrollx, scrolly, _mod1, shift) {
+  let dy = scrolly;
+  if (Math.abs(dy) <= 1) {
+    dy *= ITEM_H * 8;
+  } else if (Math.abs(dy) < 8) {
+    dy *= 48;
+  }
+  if (shift) {
+    dy *= 3;
+  }
   setScroll(scrollY - dy);
 }
 function onresize() {
