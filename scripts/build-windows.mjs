@@ -25,8 +25,9 @@ const esbuildOptions = {
   logLevel: 'info',
 };
 
-function copyEngine() {
+function copyAssets() {
   cpSync(join(root, 'platforms', 'windows', 'engine.ahk'), join(dist, 'engine.ahk'));
+  cpSync(join(root, 'src', 'jsui', 'nhb.png'), join(dist, 'nhb.png'));
 }
 
 function prepareDist() {
@@ -37,7 +38,7 @@ function prepareDist() {
     }
   }
   rmSync(zipPath, { force: true });
-  copyEngine();
+  copyAssets();
 }
 
 prepareDist();
@@ -48,7 +49,7 @@ if (watchMode) {
   await ctx.watch();
   watch(join(root, 'platforms', 'windows'), { recursive: true }, () => {
     try {
-      copyEngine();
+      copyAssets();
     } catch (err) {
       console.error(err);
     }

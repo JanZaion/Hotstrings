@@ -14,3 +14,8 @@ Add advanced options and there:
 - hud toggle
 - hotstring initiator picker
 - add hotstring list (maybe to jsui)
+
+## Other hotstrings
+
+- minus/plus only to selected intervals
+- add interval on a selected note
