@@ -10,12 +10,12 @@ mgraphics.autofill = 0;
 
 type RGB = [number, number, number];
 
-const BG: RGB = [0.106, 0.106, 0.118];
-const TEXT: RGB = [0.93, 0.93, 0.95];
-const SUBTLE: RGB = [0.56, 0.56, 0.6];
-const FAINT: RGB = [0.38, 0.38, 0.42];
-const ACCENT: RGB = [0.49, 0.54, 0.98];
-const ACCENT_TEXT: RGB = [0.78, 0.8, 1];
+const BG: RGB = [0.11, 0.106, 0.1];
+const TEXT: RGB = [0.95, 0.93, 0.9];
+const SUBTLE: RGB = [0.6, 0.57, 0.53];
+const FAINT: RGB = [0.41, 0.38, 0.35];
+const ACCENT: RGB = [0.95, 0.56, 0.18];
+const ACCENT_TEXT: RGB = [1, 0.76, 0.5];
 
 const IS_WINDOWS = max.os === 'windows';
 const UI_FONT = IS_WINDOWS ? 'Segoe UI' : 'Helvetica Neue';
@@ -168,7 +168,7 @@ function drawPills(right: number, y: number, keys: string[], active: boolean) {
   let x = right - pillsWidth(keys);
   for (const key of keys) {
     const w = pillWidth(key);
-    fill(active ? ACCENT : [1, 1, 1], active ? 0.22 : 0.07);
+    fill(active ? ACCENT : [1, 1, 1], active ? 0.32 : 0.07);
     roundRect(x, y, w, PILL_H, 5);
     mgraphics.fill();
     const tw = measure(UI_FONT_MEDIUM, PILL_FONT, key);
@@ -187,7 +187,7 @@ function drawPills(right: number, y: number, keys: string[], active: boolean) {
 function drawGroup(y: number, row: Extract<DrawRow, { kind: 'group' }>) {
   const baseline = y + GROUP_H - 10;
   const x = PAD_X + ROW_INSET;
-  textAt(x, baseline, UI_FONT_MEDIUM, 11, SUBTLE, row.title);
+  textAt(x, baseline, UI_FONT_MEDIUM, 11, ACCENT_TEXT, row.title);
   const count = String(row.count);
   const cw = measure(UI_FONT, 11, count);
   textAt(rowRight() - ROW_INSET - cw, baseline, UI_FONT, 11, FAINT, count);
@@ -197,7 +197,7 @@ function drawItem(y: number, row: Extract<DrawRow, { kind: 'item' }>, hovered: b
   const left = PAD_X;
   const right = rowRight();
   if (hovered) {
-    fill([1, 1, 1], 0.06);
+    fill(ACCENT, 0.12);
     roundRect(left, y + 1, right - left, row.h - 2, 7);
     mgraphics.fill();
   }
@@ -218,11 +218,37 @@ function drawHeader() {
   mgraphics.rectangle(0, 0, w, TOP);
   mgraphics.fill();
 
-  const x = PAD_X + ROW_INSET;
-  textAt(x, 30, UI_FONT_MEDIUM, 16, TEXT, 'Hotstrings');
-  textAt(x, 48, UI_FONT, 12, SUBTLE, `${itemCount} commands`);
+  const glow = mgraphics.pattern_create_radial(40, 0, 0, 40, 0, 260);
+  glow.add_color_stop_rgba(0, ACCENT[0], ACCENT[1], ACCENT[2], 0.24);
+  glow.add_color_stop_rgba(1, ACCENT[0], ACCENT[1], ACCENT[2], 0);
+  mgraphics.set_source(glow);
+  mgraphics.rectangle(0, 0, w, TOP);
+  mgraphics.fill();
 
-  fill([1, 1, 1], 0.07);
+  const x = PAD_X + ROW_INSET;
+  const baseline = 38;
+  textAt(x, baseline, UI_FONT_MEDIUM, 19, TEXT, 'Hotstrings');
+
+  const count = `${itemCount} commands`;
+  const countW = Math.ceil(measure(UI_FONT_MEDIUM, PILL_FONT, count)) + PILL_PAD * 2;
+  const countX = x + measure(UI_FONT_MEDIUM, 19, 'Hotstrings') + 10;
+  const countY = baseline - 15;
+  fill(ACCENT, 0.24);
+  roundRect(countX, countY, countW, PILL_H, PILL_H / 2);
+  mgraphics.fill();
+  textAt(
+    countX + PILL_PAD,
+    baselineIn(countY, PILL_H, PILL_FONT),
+    UI_FONT_MEDIUM,
+    PILL_FONT,
+    ACCENT_TEXT,
+    count
+  );
+
+  const rule = mgraphics.pattern_create_linear(0, 0, w, 0);
+  rule.add_color_stop_rgba(0, ACCENT[0], ACCENT[1], ACCENT[2], 0.7);
+  rule.add_color_stop_rgba(1, ACCENT[0], ACCENT[1], ACCENT[2], 0.05);
+  mgraphics.set_source(rule);
   mgraphics.rectangle(0, TOP - 1, w, 1);
   mgraphics.fill();
 }
@@ -242,7 +268,7 @@ function drawScrollbar() {
     return;
   }
   const sb = sbGeom();
-  fill([1, 1, 1], draggingThumb ? 0.32 : 0.16);
+  fill(ACCENT, draggingThumb ? 0.9 : 0.5);
   roundRect(sb.x, sb.thumbY, SB_W, sb.thumbH, SB_W / 2);
   mgraphics.fill();
 }
