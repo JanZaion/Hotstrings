@@ -5,6 +5,7 @@ outlets = 0;
 type HostJsThis = {
   patcher?: {
     filepath?: string;
+    getnamed: (name: string) => { getvalueof: () => unknown };
   };
 };
 
@@ -15,9 +16,76 @@ let shuttingDown = false;
 let idleMs = 4000;
 let playFromOff = false;
 let initiatorIndex = 0;
+let paused = false;
+let hudOff = false;
+let haveBinds = false;
+let uiReady = false;
 
 function hostThis() {
   return globalThis as unknown as HostJsThis;
+}
+
+function uiValue(raw: unknown) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+
+function namedNumber(name: string) {
+  const box = hostThis().patcher?.getnamed(name);
+  if (!box) {
+    return;
+  }
+  const raw = uiValue(box.getvalueof());
+  if (raw == null || raw === '') {
+    return;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return;
+  }
+  return n;
+}
+
+function clampIdle(ms: number) {
+  return Math.min(12000, Math.max(200, Math.round(Number(ms))));
+}
+
+function clampInitiator(n: number) {
+  const last = INITIATORS.length - 1;
+  return Math.min(last, Math.max(0, Math.round(Number(n)) || 0));
+}
+
+function readUi() {
+  const idle = namedNumber('hotstringAwait');
+  if (idle != null) {
+    idleMs = clampIdle(idle);
+  }
+  const pause = namedNumber('pause');
+  if (pause != null) {
+    paused = pause !== 0;
+  }
+  const noHud = namedNumber('noHud');
+  if (noHud != null) {
+    hudOff = noHud === 1;
+  }
+  const playFrom = namedNumber('playFrom');
+  if (playFrom != null) {
+    playFromOff = playFrom === 0;
+  }
+  const initiatorVal = namedNumber('initiator');
+  if (initiatorVal != null) {
+    initiatorIndex = clampInitiator(initiatorVal);
+  }
+}
+
+function syncFromUi() {
+  readUi();
+  uiReady = true;
+  if (haveBinds) {
+    writeLaunchCommands();
+  }
 }
 
 function binds(...parts: unknown[]) {
@@ -32,10 +100,21 @@ function binds(...parts: unknown[]) {
   if (!writeText(joinPath(parentDir(enginePath), 'bindings.json'), json)) {
     return;
   }
+  haveBinds = true;
   // Neutralize a leftover quit so a new launch does not exit immediately.
   writeText(joinPath(parentDir(enginePath), 'engine-cmd.txt'), '');
   launchEngine();
-  writeLaunchCommands();
+  if (uiReady) {
+    writeLaunchCommands();
+  }
+}
+
+function bang() {
+  syncFromUi();
+}
+
+function sync() {
+  syncFromUi();
 }
 
 function closebang() {
@@ -55,27 +134,22 @@ function quit() {
 }
 
 function suspend(n: number) {
-  if (n === 0) {
-    writeCommand('resume');
-    return;
-  }
-  writeCommand('suspend');
+  paused = n !== 0;
+  writeCommand(paused ? 'suspend' : 'resume');
 }
 
 function resume() {
+  paused = false;
   writeCommand('resume');
 }
 
 function hud(n: number) {
-  if (n === 1) {
-    writeCommand('hudoff');
-    return;
-  }
-  writeCommand('hudon');
+  hudOff = n === 1;
+  writeCommand(hudOff ? 'hudoff' : 'hudon');
 }
 
 function idle(ms: number) {
-  idleMs = Math.min(12000, Math.max(200, Math.round(Number(ms))));
+  idleMs = clampIdle(ms);
   writeIdleCommand();
 }
 
@@ -85,8 +159,7 @@ function playfrom(n: number) {
 }
 
 function initiator(n: number) {
-  const last = INITIATORS.length - 1;
-  initiatorIndex = Math.min(last, Math.max(0, Math.round(Number(n)) || 0));
+  initiatorIndex = clampInitiator(n);
   writeCommand(`initiator ${INITIATORS[initiatorIndex]}`);
 }
 
@@ -95,11 +168,15 @@ function writeIdleCommand() {
 }
 
 function writeLaunchCommands() {
-  const lines = [`idle ${idleMs}`, `initiator ${INITIATORS[initiatorIndex]}`];
-  if (playFromOff) {
-    lines.push('playfromoff');
-  }
-  writeCommand(lines.join('\n'));
+  writeCommand(
+    [
+      `idle ${idleMs}`,
+      `initiator ${INITIATORS[initiatorIndex]}`,
+      playFromOff ? 'playfromoff' : 'playfromon',
+      hudOff ? 'hudoff' : 'hudon',
+      paused ? 'suspend' : 'resume',
+    ].join('\n')
+  );
 }
 
 function writeCommand(cmd: string) {
@@ -184,6 +261,8 @@ function fileUrl(path: string) {
 }
 
 void binds;
+void bang;
+void sync;
 void closebang;
 void notifydeleted;
 void quit;

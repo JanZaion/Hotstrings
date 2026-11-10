@@ -8,8 +8,69 @@ var shuttingDown = false;
 var idleMs = 4e3;
 var playFromOff = false;
 var initiatorIndex = 0;
+var paused = false;
+var hudOff = false;
+var haveBinds = false;
+var uiReady = false;
 function hostThis() {
   return globalThis;
+}
+function uiValue(raw) {
+  if (raw instanceof Array) {
+    return raw[0];
+  }
+  return raw;
+}
+function namedNumber(name) {
+  const box = hostThis().patcher?.getnamed(name);
+  if (!box) {
+    return;
+  }
+  const raw = uiValue(box.getvalueof());
+  if (raw == null || raw === "") {
+    return;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return;
+  }
+  return n;
+}
+function clampIdle(ms) {
+  return Math.min(12e3, Math.max(200, Math.round(Number(ms))));
+}
+function clampInitiator(n) {
+  const last = INITIATORS.length - 1;
+  return Math.min(last, Math.max(0, Math.round(Number(n)) || 0));
+}
+function readUi() {
+  const idle2 = namedNumber("hotstringAwait");
+  if (idle2 != null) {
+    idleMs = clampIdle(idle2);
+  }
+  const pause = namedNumber("pause");
+  if (pause != null) {
+    paused = pause !== 0;
+  }
+  const noHud = namedNumber("noHud");
+  if (noHud != null) {
+    hudOff = noHud === 1;
+  }
+  const playFrom = namedNumber("playFrom");
+  if (playFrom != null) {
+    playFromOff = playFrom === 0;
+  }
+  const initiatorVal = namedNumber("initiator");
+  if (initiatorVal != null) {
+    initiatorIndex = clampInitiator(initiatorVal);
+  }
+}
+function syncFromUi() {
+  readUi();
+  uiReady = true;
+  if (haveBinds) {
+    writeLaunchCommands();
+  }
 }
 function binds(...parts) {
   const json = parts.map(String).join(" ");
@@ -23,9 +84,18 @@ function binds(...parts) {
   if (!writeText(joinPath(parentDir(enginePath), "bindings.json"), json)) {
     return;
   }
+  haveBinds = true;
   writeText(joinPath(parentDir(enginePath), "engine-cmd.txt"), "");
   launchEngine();
-  writeLaunchCommands();
+  if (uiReady) {
+    writeLaunchCommands();
+  }
+}
+function bang() {
+  syncFromUi();
+}
+function sync() {
+  syncFromUi();
 }
 function closebang() {
   quit();
@@ -41,24 +111,19 @@ function quit() {
   writeCommand("quit");
 }
 function suspend(n) {
-  if (n === 0) {
-    writeCommand("resume");
-    return;
-  }
-  writeCommand("suspend");
+  paused = n !== 0;
+  writeCommand(paused ? "suspend" : "resume");
 }
 function resume() {
+  paused = false;
   writeCommand("resume");
 }
 function hud(n) {
-  if (n === 1) {
-    writeCommand("hudoff");
-    return;
-  }
-  writeCommand("hudon");
+  hudOff = n === 1;
+  writeCommand(hudOff ? "hudoff" : "hudon");
 }
 function idle(ms) {
-  idleMs = Math.min(12e3, Math.max(200, Math.round(Number(ms))));
+  idleMs = clampIdle(ms);
   writeIdleCommand();
 }
 function playfrom(n) {
@@ -66,19 +131,22 @@ function playfrom(n) {
   writeCommand(playFromOff ? "playfromoff" : "playfromon");
 }
 function initiator(n) {
-  const last = INITIATORS.length - 1;
-  initiatorIndex = Math.min(last, Math.max(0, Math.round(Number(n)) || 0));
+  initiatorIndex = clampInitiator(n);
   writeCommand(`initiator ${INITIATORS[initiatorIndex]}`);
 }
 function writeIdleCommand() {
   writeCommand(`idle ${idleMs}`);
 }
 function writeLaunchCommands() {
-  const lines = [`idle ${idleMs}`, `initiator ${INITIATORS[initiatorIndex]}`];
-  if (playFromOff) {
-    lines.push("playfromoff");
-  }
-  writeCommand(lines.join("\n"));
+  writeCommand(
+    [
+      `idle ${idleMs}`,
+      `initiator ${INITIATORS[initiatorIndex]}`,
+      playFromOff ? "playfromoff" : "playfromon",
+      hudOff ? "hudoff" : "hudon",
+      paused ? "suspend" : "resume"
+    ].join("\n")
+  );
 }
 function writeCommand(cmd) {
   if (!ensureEnginePath()) {
@@ -154,6 +222,8 @@ function fileUrl(path) {
   return `file:///${posix.replace(/ /g, "%20")}`;
 }
 void binds;
+void bang;
+void sync;
 void closebang;
 void notifydeleted;
 void quit;
