@@ -5,12 +5,17 @@ outlets = 0;
 const MIN_AWAIT_MS = 500;
 const MAX_AWAIT_MS = 12000;
 const FRAME_MS = 33;
-const MAX_PARTICLES_PER_PX = 360 / 140;
-const SPAWN_PER_PX = 10 / 140;
-const JET_SPACING = 12;
+const CELL = 2;
+const BG = 0.1411764705882353;
+const COOL_BLUR_PASSES = 4;
+const FIRE_H = 100;
+const MAX_FLAME_H = 85;
+const EMBERS_PER_PX = 0.004;
+const MAX_EMBERS = 80;
 
 type Rgb = [number, number, number];
-type Particle = {
+type Rgba = [number, number, number, number];
+type Ember = {
   x: number;
   y: number;
   vx: number;
@@ -19,25 +24,30 @@ type Particle = {
   life: number;
   size: number;
   phase: number;
-  spark: boolean;
 };
 
-const RAMP: [number, Rgb][] = [
-  [0, [1, 0.96, 0.78]],
-  [0.15, [1, 0.82, 0.32]],
-  [0.4, [1, 0.48, 0.08]],
-  [0.7, [0.78, 0.16, 0.04]],
-  [1, [0.35, 0.05, 0.03]],
+const PALETTE_STOPS: [number, Rgba][] = [
+  [0, [0.2, 0.01, 0, 0]],
+  [0.12, [0.45, 0.04, 0.01, 0.35]],
+  [0.3, [0.8, 0.16, 0.02, 0.85]],
+  [0.5, [0.98, 0.4, 0.04, 1]],
+  [0.7, [1, 0.66, 0.14, 1]],
+  [0.86, [1, 0.88, 0.45, 1]],
+  [1, [1, 0.98, 0.85, 1]],
 ];
 
-const BLOB_RINGS: [number, number, number][] = [
-  [1, 0.28, 1],
-  [0.62, 0.45, 0.6],
-  [0.3, 0.55, 0.3],
-];
+const PALETTE = Array.from({ length: 256 }, (_, i) => overBackground(paletteColor(i / 255)));
 
 let heat = 0;
-let particles: Particle[] = [];
+let peak = 0;
+let cols = 0;
+let rows = 0;
+let scroll = 0;
+let field = new Float32Array(0);
+let source = new Float32Array(0);
+let cooling = new Float32Array(0);
+let image: Image | null = null;
+let embers: Ember[] = [];
 
 mgraphics.init();
 mgraphics.relative_coords = 0;
@@ -58,100 +68,183 @@ function rand(min: number, max: number) {
   return min + Math.random() * (max - min);
 }
 
-function rampColor(a: number): Rgb {
-  for (let i = 1; i < RAMP.length; i++) {
-    const [stop, rgb] = RAMP[i];
-    if (a <= stop) {
-      const [prevStop, prev] = RAMP[i - 1];
-      const k = (a - prevStop) / (stop - prevStop);
+function clamp(v: number, min: number, max: number) {
+  return v < min ? min : v > max ? max : v;
+}
+
+function paletteColor(v: number): Rgba {
+  for (let i = 1; i < PALETTE_STOPS.length; i++) {
+    const [stop, rgba] = PALETTE_STOPS[i];
+    if (v <= stop) {
+      const [prevStop, prev] = PALETTE_STOPS[i - 1];
+      const k = (v - prevStop) / (stop - prevStop);
       return [
-        prev[0] + (rgb[0] - prev[0]) * k,
-        prev[1] + (rgb[1] - prev[1]) * k,
-        prev[2] + (rgb[2] - prev[2]) * k,
+        prev[0] + (rgba[0] - prev[0]) * k,
+        prev[1] + (rgba[1] - prev[1]) * k,
+        prev[2] + (rgba[2] - prev[2]) * k,
+        prev[3] + (rgba[3] - prev[3]) * k,
       ];
     }
   }
-  return RAMP[RAMP.length - 1][1];
+  return PALETTE_STOPS[PALETTE_STOPS.length - 1][1];
 }
 
-function spawn(width: number, height: number) {
-  const spark = Math.random() < 0.06;
-  const jets = Math.max(2, Math.round(width / JET_SPACING));
-  const jet = Math.floor(Math.random() * jets);
-  const drift = Math.sin(Date.now() / 900 + jet * 2.4) * JET_SPACING * 0.3;
-  particles.push({
-    x: (jet / (jets - 1)) * width + drift + rand(-7, 7),
-    y: height + rand(0, 4),
-    vx: rand(-0.1, 0.1),
-    vy: -(spark ? rand(1.6, 2.6) : rand(0.9, 1.6)) * (0.6 + 0.5 * heat),
+function overBackground([r, g, b, a]: Rgba): Rgb {
+  return [BG + (r - BG) * a, BG + (g - BG) * a, BG + (b - BG) * a];
+}
+
+function smoothNoise(w: number, h: number) {
+  let noise = Float32Array.from({ length: w * h }, () => Math.random());
+  for (let pass = 0; pass < COOL_BLUR_PASSES; pass++) {
+    const next = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            sum += noise[((y + dy + h) % h) * w + ((x + dx + w) % w)];
+          }
+        }
+        next[y * w + x] = sum / 9;
+      }
+    }
+    noise = next;
+  }
+  let min = 1;
+  let max = 0;
+  for (const v of noise) {
+    min = Math.min(min, v);
+    max = Math.max(max, v);
+  }
+  return noise.map(v => ((v - min) / (max - min)) ** 1.5);
+}
+
+function maxFlameHeight() {
+  return MAX_FLAME_H * (0.35 + 0.65 * heat);
+}
+
+function resize(width: number, height: number) {
+  const c = Math.ceil(width / CELL) + 1;
+  const r = Math.ceil(Math.min(FIRE_H, height) / CELL);
+  if ((c === cols && r === rows) || r < 2) {
+    return;
+  }
+  cols = c;
+  rows = r;
+  scroll = 0;
+  field = new Float32Array(c * r);
+  source = new Float32Array(c);
+  cooling = smoothNoise(c, r * 2);
+  image = new Image(c, r);
+}
+
+function feedSource() {
+  const bottom = (rows - 1) * cols;
+  for (let x = 0; x < cols; x++) {
+    source[x] = clamp(source[x] + rand(-0.35, 0.35), 0, 1);
+  }
+  for (let x = 0; x < cols; x++) {
+    const left = source[Math.max(0, x - 1)];
+    const right = source[Math.min(cols - 1, x + 1)];
+    const s = (left + source[x] * 2 + right) / 4;
+    field[bottom + x] = heat > 0 ? (0.6 + 0.4 * s) * (0.85 + 0.15 * heat) : field[bottom + x] * 0.7;
+  }
+}
+
+function step() {
+  feedSource();
+  const decay = CELL / (maxFlameHeight() * 0.75);
+  const coolRows = rows * 2;
+  scroll = (scroll + 1) % coolRows;
+  peak = 0;
+  for (let y = 0; y < rows - 1; y++) {
+    const below = (y + 1) * cols;
+    const below2 = Math.min(y + 2, rows - 1) * cols;
+    const coolRow = ((y + scroll) % coolRows) * cols;
+    for (let x = 0; x < cols; x++) {
+      const sx = Math.random() < 0.3 ? clamp(x + (Math.random() < 0.5 ? -1 : 1), 0, cols - 1) : x;
+      const l = Math.max(0, sx - 1);
+      const r = Math.min(cols - 1, sx + 1);
+      const avg =
+        (field[below + l] + field[below + sx] * 2 + field[below + r] + field[below2 + sx]) / 5;
+      const v = Math.max(0, avg - decay * (0.15 + 1.7 * cooling[coolRow + x]));
+      field[y * cols + x] = v;
+      if (v > peak) {
+        peak = v;
+      }
+    }
+  }
+}
+
+function writeImage() {
+  if (!image) {
+    return;
+  }
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const [r, g, b] = PALETTE[Math.min(255, Math.floor(field[y * cols + x] * 255))];
+      image.setpixel(x, y, r, g, b, 1);
+    }
+  }
+}
+
+function spawnEmber(width: number, height: number) {
+  embers.push({
+    x: rand(0, width),
+    y: height - rand(maxFlameHeight() * 0.3, maxFlameHeight() * 0.7),
+    vx: rand(-0.3, 0.3),
+    vy: -rand(0.7, 1.6) * (0.6 + 0.6 * heat),
     age: 0,
-    life: (spark ? rand(40, 70) : rand(26, 46)) * (0.4 + 0.8 * heat),
-    size: spark ? rand(0.7, 1.2) : rand(4, 7.5) * (0.6 + 0.5 * heat),
+    life: rand(30, 70),
+    size: rand(0.5, 1.1),
     phase: rand(0, Math.PI * 2),
-    spark,
   });
 }
 
 function tick() {
   const [width, height] = mgraphics.size;
+  resize(width, height);
+  if (rows > 0) {
+    step();
+    writeImage();
+  }
   if (heat > 0) {
-    const count = heat * SPAWN_PER_PX * width + Math.random();
-    const maxParticles = MAX_PARTICLES_PER_PX * width;
-    for (let i = 0; i < count && particles.length < maxParticles; i++) {
-      spawn(width, height);
+    const count = heat * EMBERS_PER_PX * width + Math.random() * 0.4;
+    for (let i = 0; i < Math.floor(count) && embers.length < MAX_EMBERS; i++) {
+      spawnEmber(width, height);
     }
   }
-  for (const p of particles) {
-    p.age++;
-    p.x += p.vx + Math.sin(p.phase + p.age * 0.25) * (p.spark ? 0.5 : 0.25);
-    p.y += p.vy;
+  for (const e of embers) {
+    e.age++;
+    e.x += e.vx + Math.sin(e.phase + e.age * 0.2) * 0.4;
+    e.y += e.vy;
   }
-  particles = particles.filter(p => p.age < p.life);
+  embers = embers.filter(e => e.age < e.life);
   mgraphics.redraw();
-  if (heat <= 0 && particles.length === 0) {
+  if (heat <= 0 && peak < 0.01 && embers.length === 0) {
     ticker.cancel();
   }
 }
 
-function drawBed(width: number, height: number) {
-  const bedH = 4 + 6 * heat;
-  const bed = mgraphics.pattern_create_linear(0, height, 0, height - bedH);
-  bed.add_color_stop_rgba(0, 1, 0.55, 0.12, 0.35 * heat);
-  bed.add_color_stop_rgba(1, 1, 0.35, 0.05, 0);
-  mgraphics.set_source(bed);
-  mgraphics.rectangle(0, height - bedH, width, bedH);
+function drawEmber(e: Ember) {
+  const a = e.age / e.life;
+  const alpha = (1 - a) * (0.6 + 0.4 * Math.sin(e.age * 1.3 + e.phase));
+  mgraphics.set_source_rgba(1, 0.8 - a * 0.4, 0.35 - a * 0.3, alpha);
+  mgraphics.ellipse(e.x - e.size, e.y - e.size, e.size * 2, e.size * 2);
   mgraphics.fill();
 }
 
-function drawParticle(p: Particle) {
-  const a = p.age / p.life;
-  if (p.spark) {
-    const [r, g, b] = rampColor(a * 0.5);
-    const alpha = (1 - a) * (0.6 + 0.4 * Math.sin(p.age * 1.7 + p.phase));
-    mgraphics.set_source_rgba(r, g, b, alpha);
-    mgraphics.ellipse(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
-    mgraphics.fill();
-    return;
-  }
-  const radius = p.size * (1 - a * 0.7);
-  const alpha = (1 - a) ** 1.2 * 0.8;
-  for (const [scale, weight, cool] of BLOB_RINGS) {
-    const [cr, cg, cb] = rampColor(a * cool);
-    const rx = radius * scale;
-    const ry = rx * 2;
-    mgraphics.set_source_rgba(cr, cg, cb, alpha * weight);
-    mgraphics.ellipse(p.x - rx, p.y - ry, rx * 2, ry * 2);
-    mgraphics.fill();
-  }
-}
-
 function paint() {
-  const [width, height] = mgraphics.size;
-  if (heat > 0) {
-    drawBed(width, height);
+  const height = mgraphics.size[1];
+  if (image && peak > 0.01) {
+    mgraphics.save();
+    mgraphics.translate(0, height - rows * CELL);
+    mgraphics.scale(CELL, CELL);
+    mgraphics.image_surface_draw(image);
+    mgraphics.restore();
   }
-  for (const p of particles) {
-    drawParticle(p);
+  for (const e of embers) {
+    drawEmber(e);
   }
 }
 
