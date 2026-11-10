@@ -24,5 +24,6 @@
     "noImplicitReturns": true,
     "allowUnreachableCode": false
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/hotstringList"]
 }

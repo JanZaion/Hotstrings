@@ -26,6 +26,12 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/hotstringList/**/*.ts'],
+    languageOptions: {
+      globals: globals.browser,
+    },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       ecmaVersion: 2022,
