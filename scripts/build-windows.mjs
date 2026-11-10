@@ -19,7 +19,11 @@ const amxdName = 'Keyboard_Warrior.amxd';
 const listTemplate = join(root, 'src', 'hotstringList', 'hotstrings.html');
 
 const esbuildOptions = {
-  entryPoints: [join(root, 'src', 'host.ts'), join(root, 'src', 'live.ts')],
+  entryPoints: [
+    join(root, 'src', 'host.ts'),
+    join(root, 'src', 'live.ts'),
+    join(root, 'src', 'fire.ts'),
+  ],
   outdir: dist,
   entryNames: '[name]',
   bundle: true,
