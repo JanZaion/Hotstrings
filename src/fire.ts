@@ -7,7 +7,7 @@ const MAX_AWAIT_MS = 12000;
 const FRAME_MS = 33;
 const MAX_PARTICLES_PER_PX = 360 / 140;
 const SPAWN_PER_PX = 10 / 140;
-const JET_SPACING = 24;
+const JET_SPACING = 12;
 
 type Rgb = [number, number, number];
 type Particle = {

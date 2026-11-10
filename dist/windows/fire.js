@@ -7,7 +7,7 @@ var MAX_AWAIT_MS = 12e3;
 var FRAME_MS = 33;
 var MAX_PARTICLES_PER_PX = 360 / 140;
 var SPAWN_PER_PX = 10 / 140;
-var JET_SPACING = 24;
+var JET_SPACING = 12;
 var RAMP = [
   [0, [1, 0.96, 0.78]],
   [0.15, [1, 0.82, 0.32]],
