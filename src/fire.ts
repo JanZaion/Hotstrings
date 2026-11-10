@@ -5,7 +5,9 @@ outlets = 0;
 const MIN_AWAIT_MS = 500;
 const MAX_AWAIT_MS = 12000;
 const FRAME_MS = 33;
-const MAX_PARTICLES = 360;
+const MAX_PARTICLES_PER_PX = 360 / 140;
+const SPAWN_PER_PX = 10 / 140;
+const JET_SPACING = 24;
 
 type Rgb = [number, number, number];
 type Particle = {
@@ -33,7 +35,6 @@ const BLOB_RINGS: [number, number, number][] = [
   [0.62, 0.45, 0.6],
   [0.3, 0.55, 0.3],
 ];
-const JETS = 6;
 
 let heat = 0;
 let particles: Particle[] = [];
@@ -75,10 +76,11 @@ function rampColor(a: number): Rgb {
 
 function spawn(width: number, height: number) {
   const spark = Math.random() < 0.06;
-  const jet = Math.floor(Math.random() * JETS);
-  const drift = Math.sin(Date.now() / 900 + jet * 2.4) * width * 0.05;
+  const jets = Math.max(2, Math.round(width / JET_SPACING));
+  const jet = Math.floor(Math.random() * jets);
+  const drift = Math.sin(Date.now() / 900 + jet * 2.4) * JET_SPACING * 0.3;
   particles.push({
-    x: ((jet + 0.5) / JETS) * width + drift + rand(-7, 7),
+    x: (jet / (jets - 1)) * width + drift + rand(-7, 7),
     y: height + rand(0, 4),
     vx: rand(-0.1, 0.1),
     vy: -(spark ? rand(1.6, 2.6) : rand(0.9, 1.6)) * (0.6 + 0.5 * heat),
@@ -93,8 +95,9 @@ function spawn(width: number, height: number) {
 function tick() {
   const [width, height] = mgraphics.size;
   if (heat > 0) {
-    const count = heat * 10 + Math.random();
-    for (let i = 0; i < count && particles.length < MAX_PARTICLES; i++) {
+    const count = heat * SPAWN_PER_PX * width + Math.random();
+    const maxParticles = MAX_PARTICLES_PER_PX * width;
+    for (let i = 0; i < count && particles.length < maxParticles; i++) {
       spawn(width, height);
     }
   }
