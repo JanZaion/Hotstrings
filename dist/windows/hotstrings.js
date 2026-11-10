@@ -389,12 +389,12 @@ function itemsFor(keys) {
 }
 function hotstringSections() {
   const used = /* @__PURE__ */ new Set();
-  const sections = [];
+  const sections2 = [];
   function add(title, items) {
     if (items.length === 0) {
       return;
     }
-    sections.push({ title, items });
+    sections2.push({ title, items });
     for (const item of items) {
       used.add(item.key);
     }
@@ -423,13 +423,13 @@ function hotstringSections() {
   add("MIDI effects", itemsFor(MIDI_KEYS));
   const leftover = BINDINGS.hotstrings.filter((bind) => !used.has(bind.key)).map((bind) => ({ key: bind.key, desc: itemDesc(bind.key, bind.bind) }));
   add("Other", leftover);
-  return sections;
+  return sections2;
 }
 
 // src/jsui/hotstrings.ts
 autowatch = 1;
 inlets = 1;
-outlets = 0;
+outlets = 1;
 mgraphics.init();
 mgraphics.relative_coords = 0;
 mgraphics.autofill = 0;
@@ -453,12 +453,20 @@ var PILL_PAD = 7;
 var PILL_MIN_W = 20;
 var PILL_GAP = 4;
 var PILL_FONT = 11;
+var FIELD_Y = 14;
+var FIELD_H = 34;
+var FIELD_TEXT_X = 34;
 var FADE_H = 12;
 var SB_W = 8;
 var SB_PAD = 4;
-var rows = buildRows();
-var contentH = rows.reduce((sum, row) => sum + row.h, 0) + LIST_PAD_BOTTOM;
-var itemCount = rows.reduce((n, row) => n + (row.kind === "item" ? 1 : 0), 0);
+var sections = buildSections();
+var totalCount = sections.reduce((n, section) => n + section.entries.length, 0);
+var query = "";
+var editing = false;
+var rows = [];
+var contentH = 0;
+var matchCount = 0;
+var clearRect = null;
 var scrollY = 0;
 var dragOrigin = 0;
 var dragScroll = 0;
@@ -467,21 +475,52 @@ var draggingThumb = false;
 var hoverRow = -1;
 var mouseX = -1;
 var mouseY = -1;
-function buildRows() {
-  const out = [];
-  for (const section of hotstringSections()) {
-    out.push({ kind: "group", title: section.title, count: section.items.length, h: GROUP_H });
+rebuildRows();
+function buildSections() {
+  return hotstringSections().map((section) => {
     const combos = section.title === "Hotkeys";
-    for (const item of section.items) {
+    const entries = section.items.map((item) => ({
+      keys: combos ? item.key.split("+") : [item.key],
+      desc: item.desc,
+      keyText: item.key.toLowerCase(),
+      search: `${item.key} ${item.desc}`.toLowerCase()
+    }));
+    return { title: section.title, search: section.title.toLowerCase(), entries };
+  });
+}
+function needle() {
+  return query.trim().toLowerCase();
+}
+function rebuildRows() {
+  const q = needle();
+  const out = [];
+  for (const section of sections) {
+    const entries = q === "" || section.search.includes(q) ? section.entries : section.entries.filter((entry) => entry.search.includes(q));
+    if (entries.length === 0) {
+      continue;
+    }
+    out.push({ kind: "group", title: section.title, count: entries.length, h: GROUP_H });
+    for (const entry of entries) {
       out.push({
         kind: "item",
-        keys: combos ? item.key.split("+") : [item.key],
-        desc: item.desc,
+        keys: entry.keys,
+        desc: entry.desc,
+        keyMatch: q !== "" && entry.keyText.includes(q),
         h: ITEM_H
       });
     }
   }
-  return out;
+  rows = out;
+  contentH = rows.reduce((sum, row) => sum + row.h, 0) + LIST_PAD_BOTTOM;
+  matchCount = rows.reduce((n, row) => n + (row.kind === "item" ? 1 : 0), 0);
+}
+function setQuery(next) {
+  if (next === query) {
+    return;
+  }
+  query = next;
+  rebuildRows();
+  setScroll(0);
 }
 function viewW() {
   const s = mgraphics.size;
@@ -529,21 +568,21 @@ function font(face, size) {
   mgraphics.select_font_face(face);
   mgraphics.set_font_size(size);
 }
-function measure(face, size, text) {
+function measure(face, size, text2) {
   font(face, size);
-  return mgraphics.text_measure(text)[0];
+  return mgraphics.text_measure(text2)[0];
 }
-function textAt(x, y, face, size, rgb, text) {
+function textAt(x, y, face, size, rgb, text2) {
   font(face, size);
   fill(rgb);
   mgraphics.move_to(x, y);
-  mgraphics.show_text(text);
+  mgraphics.show_text(text2);
 }
-function ellipsize(text, maxW) {
-  if (mgraphics.text_measure(text)[0] <= maxW) {
-    return text;
+function ellipsize(text2, maxW) {
+  if (mgraphics.text_measure(text2)[0] <= maxW) {
+    return text2;
   }
-  let s = text;
+  let s = text2;
   while (s.length > 1 && mgraphics.text_measure(`${s}\u2026`)[0] > maxW) {
     s = s.slice(0, -1);
   }
@@ -561,11 +600,15 @@ function pillWidth(key) {
 function pillsWidth(keys) {
   return keys.reduce((sum, key) => sum + pillWidth(key), 0) + (keys.length - 1) * PILL_GAP;
 }
-function drawPills(right, y, keys, active) {
+function drawPills(right, y, keys, state) {
   let x = right - pillsWidth(keys);
   for (const key of keys) {
     const w = pillWidth(key);
-    fill(active ? ACCENT : [1, 1, 1], active ? 0.32 : 0.07);
+    if (state === "idle") {
+      fill([1, 1, 1], 0.07);
+    } else {
+      fill(ACCENT, state === "hover" ? 0.32 : 0.18);
+    }
     roundRect(x, y, w, PILL_H, 5);
     mgraphics.fill();
     const tw = measure(UI_FONT_MEDIUM, PILL_FONT, key);
@@ -574,11 +617,31 @@ function drawPills(right, y, keys, active) {
       baselineIn(y, PILL_H, PILL_FONT),
       UI_FONT_MEDIUM,
       PILL_FONT,
-      active ? ACCENT_TEXT : SUBTLE,
+      state === "idle" ? SUBTLE : ACCENT_TEXT,
       key
     );
     x += w + PILL_GAP;
   }
+}
+function drawHighlighted(x, y, h, text2) {
+  const baseline = baselineIn(y, h, 13);
+  const q = needle();
+  const at = q === "" ? -1 : text2.toLowerCase().indexOf(q);
+  if (at < 0) {
+    textAt(x, baseline, UI_FONT, 13, TEXT, text2);
+    return;
+  }
+  const pre = text2.slice(0, at);
+  const mid = text2.slice(at, at + q.length);
+  const post = text2.slice(at + q.length);
+  const preW = measure(UI_FONT, 13, pre);
+  const midW = measure(UI_FONT, 13, mid);
+  fill(ACCENT, 0.2);
+  roundRect(x + preW - 1, y + 7, midW + 2, h - 14, 3);
+  mgraphics.fill();
+  textAt(x, baseline, UI_FONT, 13, TEXT, pre);
+  textAt(x + preW, baseline, UI_FONT, 13, ACCENT_TEXT, mid);
+  textAt(x + preW + midW, baseline, UI_FONT, 13, TEXT, post);
 }
 function drawGroup(y, row) {
   const baseline = y + GROUP_H - 10;
@@ -597,12 +660,94 @@ function drawItem(y, row, hovered) {
     mgraphics.fill();
   }
   const pillsRight = right - ROW_INSET;
-  drawPills(pillsRight, y + (row.h - PILL_H) / 2, row.keys, hovered);
+  let pillState = "idle";
+  if (hovered) {
+    pillState = "hover";
+  } else if (row.keyMatch) {
+    pillState = "match";
+  }
+  drawPills(pillsRight, y + (row.h - PILL_H) / 2, row.keys, pillState);
   const textX = left + ROW_INSET;
   const textW = pillsRight - pillsWidth(row.keys) - 16 - textX;
   font(UI_FONT, 13);
-  const desc = ellipsize(row.desc, textW);
-  textAt(textX, baselineIn(y, row.h, 13), UI_FONT, 13, TEXT, desc);
+  drawHighlighted(textX, y, row.h, ellipsize(row.desc, textW));
+}
+function drawSearchIcon(cx, cy, rgb) {
+  fill(rgb);
+  mgraphics.set_line_width(1.6);
+  mgraphics.ellipse(cx - 5, cy - 5, 10, 10);
+  mgraphics.stroke();
+  mgraphics.move_to(cx + 3.6, cy + 3.6);
+  mgraphics.line_to(cx + 7, cy + 7);
+  mgraphics.stroke();
+}
+function drawClearButton(x, y, size) {
+  fill([1, 1, 1], 0.1);
+  mgraphics.ellipse(x, y, size, size);
+  mgraphics.fill();
+  const c = size / 2;
+  const arm = 3;
+  fill(TEXT, 0.8);
+  mgraphics.set_line_width(1.4);
+  mgraphics.move_to(x + c - arm, y + c - arm);
+  mgraphics.line_to(x + c + arm, y + c + arm);
+  mgraphics.move_to(x + c + arm, y + c - arm);
+  mgraphics.line_to(x + c - arm, y + c + arm);
+  mgraphics.stroke();
+}
+function drawSearchField() {
+  const x = PAD_X;
+  const y = FIELD_Y;
+  const w = rowRight() - PAD_X;
+  const h = FIELD_H;
+  const active = query !== "";
+  fill([1, 1, 1], 0.06);
+  roundRect(x, y, w, h, 9);
+  mgraphics.fill();
+  fill(active ? ACCENT : [1, 1, 1], active ? 0.55 : 0.1);
+  mgraphics.set_line_width(1);
+  roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 8.5);
+  mgraphics.stroke();
+  drawSearchIcon(x + 17, y + h / 2 - 1, active ? ACCENT : SUBTLE);
+  let right = x + w - 10;
+  clearRect = null;
+  if (active) {
+    const size = 16;
+    const bx = right - size;
+    drawClearButton(bx, y + (h - size) / 2, size);
+    clearRect = [bx - 4, y, size + 8, h];
+    right = bx - 8;
+  }
+  const count = active ? `${matchCount} of ${totalCount}` : String(totalCount);
+  const countW = measure(UI_FONT, 11, count);
+  textAt(right - countW, baselineIn(y, h, 11), UI_FONT, 11, FAINT, count);
+  right -= countW + 12;
+  const textX = x + FIELD_TEXT_X;
+  const baseline = baselineIn(y, h, 13);
+  let caretX = textX - 1;
+  if (active) {
+    font(UI_FONT, 13);
+    let shown = query;
+    while (shown.length > 1 && mgraphics.text_measure(shown)[0] > right - textX) {
+      shown = shown.slice(1);
+    }
+    textAt(textX, baseline, UI_FONT, 13, TEXT, shown);
+    caretX = textX + measure(UI_FONT, 13, shown) + 1;
+  } else {
+    textAt(textX, baseline, UI_FONT, 13, FAINT, "Search hotstrings");
+  }
+  if (editing) {
+    fill(ACCENT);
+    mgraphics.rectangle(caretX, y + 9, 1.5, h - 18);
+    mgraphics.fill();
+  }
+}
+function drawEmptyState() {
+  const center = (PAD_X + rowRight()) / 2;
+  const title = `No matches for "${query.trim()}"`;
+  const hint = "Press Esc to clear the search";
+  textAt(center - measure(UI_FONT, 13, title) / 2, TOP + 44, UI_FONT, 13, SUBTLE, title);
+  textAt(center - measure(UI_FONT, 11, hint) / 2, TOP + 64, UI_FONT, 11, FAINT, hint);
 }
 function drawHeader() {
   const w = viewW();
@@ -615,24 +760,7 @@ function drawHeader() {
   mgraphics.set_source(glow);
   mgraphics.rectangle(0, 0, w, TOP);
   mgraphics.fill();
-  const x = PAD_X + ROW_INSET;
-  const baseline = 38;
-  textAt(x, baseline, UI_FONT_MEDIUM, 19, TEXT, "Hotstrings");
-  const count = `${itemCount} commands`;
-  const countW = Math.ceil(measure(UI_FONT_MEDIUM, PILL_FONT, count)) + PILL_PAD * 2;
-  const countX = x + measure(UI_FONT_MEDIUM, 19, "Hotstrings") + 10;
-  const countY = baseline - 15;
-  fill(ACCENT, 0.24);
-  roundRect(countX, countY, countW, PILL_H, PILL_H / 2);
-  mgraphics.fill();
-  textAt(
-    countX + PILL_PAD,
-    baselineIn(countY, PILL_H, PILL_FONT),
-    UI_FONT_MEDIUM,
-    PILL_FONT,
-    ACCENT_TEXT,
-    count
-  );
+  drawSearchField();
   const rule = mgraphics.pattern_create_linear(0, 0, w, 0);
   rule.add_color_stop_rgba(0, ACCENT[0], ACCENT[1], ACCENT[2], 0.7);
   rule.add_color_stop_rgba(1, ACCENT[0], ACCENT[1], ACCENT[2], 0.05);
@@ -676,6 +804,9 @@ function paint() {
     }
     y = next;
   });
+  if (rows.length === 0) {
+    drawEmptyState();
+  }
   if (scrollY > 0) {
     drawFade();
   }
@@ -716,8 +847,16 @@ function onclick(x, y) {
   mouseX = x;
   mouseY = y;
   if (y < TOP) {
+    if (clearRect && hitRect(clearRect, x, y)) {
+      outlet(0, "clear");
+      setQuery("");
+    }
+    outlet(0, "select");
+    editing = true;
+    mgraphics.redraw();
     return;
   }
+  editing = false;
   if (inScrollbar(x)) {
     draggingThumb = true;
     scrollFromThumb(y);
@@ -778,7 +917,16 @@ function onwheel(x, y, _scrollx, scrolly, _mod1, shift) {
 function onresize() {
   setScroll(scrollY);
 }
+function hitRect(rect, x, y) {
+  return x >= rect[0] && x <= rect[0] + rect[2] && y >= rect[1] && y <= rect[1] + rect[3];
+}
+function text(...words) {
+  editing = true;
+  setQuery(words.join(" "));
+  mgraphics.redraw();
+}
 void paint;
+void text;
 void onclick;
 void ondrag;
 void onidle;
