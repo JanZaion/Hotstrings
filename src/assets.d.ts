@@ -3,7 +3,7 @@ declare module '*.ahk' {
   export default text;
 }
 
-declare module 'kw:hotstrings.html' {
+declare module 'virtual:hotstrings.html' {
   const html: string;
   export default html;
 }

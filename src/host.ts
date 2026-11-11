@@ -1,5 +1,5 @@
 import engineSource from '../platforms/windows/engine.ahk';
-import hotstringsPage from 'kw:hotstrings.html';
+import hotstringsPage from 'virtual:hotstrings.html';
 
 autowatch = 1;
 inlets = 1;

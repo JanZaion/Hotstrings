@@ -5,11 +5,11 @@ import * as esbuild from 'esbuild';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist', 'windows');
-const cache = join(root, 'node_modules', '.cache', 'keyboard-warrior');
+const cache = join(root, 'node_modules', '.cache', 'hotstrings');
 const listPage = join(cache, 'hotstrings.html');
-const zipPath = join(root, 'dist', 'Keyboard_Warrior_Windows.zip');
+const zipPath = join(root, 'dist', 'Hotstrings_Windows.zip');
 const watchMode = process.argv.includes('--watch');
-const amxdName = 'Keyboard_Warrior.amxd';
+const amxdName = 'Hotstrings.amxd';
 const listTemplate = join(root, 'src', 'hotstringList', 'hotstrings.html');
 
 const esbuildOptions = {
@@ -32,7 +32,7 @@ const esbuildOptions = {
     {
       name: 'hotstring-list-page',
       setup(build) {
-        build.onResolve({ filter: /^kw:hotstrings\.html$/ }, () => ({ path: listPage }));
+        build.onResolve({ filter: /^virtual:hotstrings\.html$/ }, () => ({ path: listPage }));
       },
     },
   ],
