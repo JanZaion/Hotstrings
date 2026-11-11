@@ -17,6 +17,7 @@ CMD_PATH := A_ScriptDir "\engine-cmd.txt"
 KEYS_PATH := A_ScriptDir "\bindings.json"
 HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789=-"
 HS_INITIATORS := [";", "/", "CapsLock"]
+DOUBLE_TAP_MS := 300
 LIST_TITLE := "[Hotstrings]"
 LIST_SEARCH_X := 60
 LIST_SEARCH_Y := 31
@@ -369,6 +370,10 @@ RegisterHot(keyName, bindName, value?, keys?) {
     fn := IsSet(value)
         ? (*) => FireHot(bindName, keysToSend, value)
         : (*) => FireHot(bindName, keysToSend)
+    if RegExMatch(keyName, "^(\w+) \1$", &tap) {
+        RegisterDoubleTap(tap[1], fn)
+        return
+    }
     try {
         Hotkey(keyName, fn)
         if bindName = "playFrom" {
@@ -377,6 +382,35 @@ RegisterHot(keyName, bindName, value?, keys?) {
     } catch as err {
         bad.Push(keyName " (" err.Message ")")
     }
+}
+
+; "Key Key" binds fire on two clean taps of Key. A tap is dirty when any other
+; key or mouse button was pressed while Key was held or between the two taps,
+; so Shift used as a modifier (typing, Shift-click) never counts.
+RegisterDoubleTap(key, fn) {
+    global bad
+    state := { last: 0, clean: false }
+    try {
+        Hotkey("~*" key, (*) => state.clean := InStr(A_PriorKey, key) > 0)
+        Hotkey("~*" key " Up", (*) => DoubleTapUp(key, state, fn))
+        InstallMouseHook
+    } catch as err {
+        bad.Push(key " " key " (" err.Message ")")
+    }
+}
+
+DoubleTapUp(key, state, fn) {
+    global DOUBLE_TAP_MS
+    if !InStr(A_PriorKey, key) {
+        state.last := 0
+        return
+    }
+    if state.clean && A_TickCount - state.last < DOUBLE_TAP_MS {
+        state.last := 0
+        fn()
+        return
+    }
+    state.last := A_TickCount
 }
 
 SetPlayFromEnabled(on) {

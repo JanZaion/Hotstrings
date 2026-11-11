@@ -16,6 +16,7 @@ const HOTKEY_DESC: Record<string, string> = {
   '^Space': 'Play or stop from the start marker',
   '^!Left': 'Nudge the selected device left',
   '^!Right': 'Nudge the selected device right',
+  'Shift Shift': 'Open this list',
 };
 
 const HOTSTRING_DESC: Record<string, string> = {

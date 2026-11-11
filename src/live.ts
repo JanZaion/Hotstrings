@@ -104,6 +104,7 @@ import {
   voc,
   wav,
 } from './actions/devices';
+import { openList } from './actions/list';
 import { doub, fit, half, inv, rev } from './actions/midiClip';
 import { headroom, heat, volup, voldown } from './actions/mixer';
 import { chainLeft, chainRight, col, exp, first, last, sol, unsol } from './actions/rack';
@@ -130,6 +131,7 @@ void cliploop;
 void loc;
 void clip;
 void playFrom;
+void openList;
 void volup;
 void voldown;
 void headroom;

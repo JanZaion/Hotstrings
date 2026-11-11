@@ -587,7 +587,8 @@ var BINDINGS = {
     { key: "`", bind: "cliploop", keys: "^j" },
     { key: "^Space", bind: "playFrom" },
     { key: "^!Left", bind: "chainLeft" },
-    { key: "^!Right", bind: "chainRight" }
+    { key: "^!Right", bind: "chainRight" },
+    { key: "Shift Shift", bind: "openList" }
   ],
   hotstrings: [
     { key: "chord", bind: "chord" },
@@ -1508,6 +1509,20 @@ function vel() {
   insertAtChainEnd(NATIVE_DEVICES.vel);
 }
 
+// src/actions/list.ts
+var LIST_PATCHER = "Hotstrings";
+function openList() {
+  for (let obj = patcher.firstobject; obj; obj = obj.nextobject) {
+    const sub = obj.subpatcher();
+    if (sub && sub.name === LIST_PATCHER) {
+      sub.message("front");
+      return;
+    }
+  }
+  post(`openList: no [${LIST_PATCHER}] subpatcher
+`);
+}
+
 // src/actions/midiClip.ts
 var live3 = new LiveAPI();
 var detailClip5 = new LiveAPI();
@@ -2099,6 +2114,7 @@ void cliploop;
 void loc;
 void clip;
 void playFrom;
+void openList;
 void volup;
 void voldown;
 void headroom;

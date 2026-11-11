@@ -7,6 +7,7 @@ export const BINDINGS: Bindings = {
     { key: '^Space', bind: 'playFrom' },
     { key: '^!Left', bind: 'chainLeft' },
     { key: '^!Right', bind: 'chainRight' },
+    { key: 'Shift Shift', bind: 'openList' },
   ],
   hotstrings: [
     { key: 'chord', bind: 'chord' },

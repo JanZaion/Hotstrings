@@ -10,7 +10,7 @@ const list = byId('list');
 const sections = hotstringSections().map(section => {
   const combos = section.title === 'Hotkeys';
   const entries = section.items.map(item => ({
-    keys: combos ? item.key.split('+') : [item.key],
+    keys: combos ? item.key.split(/[+ ]/) : [item.key],
     desc: item.desc,
     keyText: item.key.toLowerCase(),
     search: `${item.key} ${item.desc}`.toLowerCase(),

@@ -387,7 +387,8 @@
       { key: "`", bind: "cliploop", keys: "^j" },
       { key: "^Space", bind: "playFrom" },
       { key: "^!Left", bind: "chainLeft" },
-      { key: "^!Right", bind: "chainRight" }
+      { key: "^!Right", bind: "chainRight" },
+      { key: "Shift Shift", bind: "openList" }
     ],
     hotstrings: [
       { key: "chord", bind: "chord" },
@@ -437,7 +438,8 @@
     "`": "Loop the open clip",
     "^Space": "Play or stop from the start marker",
     "^!Left": "Nudge the selected device left",
-    "^!Right": "Nudge the selected device right"
+    "^!Right": "Nudge the selected device right",
+    "Shift Shift": "Open this list"
   };
   var HOTSTRING_DESC = {
     chord: "Diatonic triad from the clip scale",
@@ -617,7 +619,7 @@
   var sections = hotstringSections().map((section) => {
     const combos = section.title === "Hotkeys";
     const entries = section.items.map((item) => ({
-      keys: combos ? item.key.split("+") : [item.key],
+      keys: combos ? item.key.split(/[+ ]/) : [item.key],
       desc: item.desc,
       keyText: item.key.toLowerCase(),
       search: `${item.key} ${item.desc}`.toLowerCase()
