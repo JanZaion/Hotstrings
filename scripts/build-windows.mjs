@@ -1,18 +1,12 @@
-import {
-  cpSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  watch,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist', 'windows');
+const cache = join(root, 'node_modules', '.cache', 'keyboard-warrior');
+const listPage = join(cache, 'hotstrings.html');
 const zipPath = join(root, 'dist', 'Keyboard_Warrior_Windows.zip');
 const watchMode = process.argv.includes('--watch');
 const amxdName = 'Keyboard_Warrior.amxd';
@@ -33,6 +27,15 @@ const esbuildOptions = {
   treeShaking: false,
   minifyIdentifiers: false,
   logLevel: 'info',
+  loader: { '.ahk': 'text', '.html': 'text' },
+  plugins: [
+    {
+      name: 'hotstring-list-page',
+      setup(build) {
+        build.onResolve({ filter: /^kw:hotstrings\.html$/ }, () => ({ path: listPage }));
+      },
+    },
+  ],
 };
 
 let listScript = '';
@@ -40,7 +43,7 @@ let listScript = '';
 function writeListPage() {
   const script = `<script>\n${listScript.replaceAll('</script', '<\\/script')}</script>`;
   const html = readFileSync(listTemplate, 'utf8').replace('<!-- bundle -->', () => script);
-  writeFileSync(join(dist, 'hotstrings.html'), html);
+  writeFileSync(listPage, html);
 }
 
 const listOptions = {
@@ -67,36 +70,26 @@ const listOptions = {
   ],
 };
 
-function copyEngine() {
-  cpSync(join(root, 'platforms', 'windows', 'engine.ahk'), join(dist, 'engine.ahk'));
-}
-
 function prepareDist() {
   mkdirSync(dist, { recursive: true });
+  mkdirSync(cache, { recursive: true });
   for (const name of readdirSync(dist)) {
     if (name !== amxdName) {
       rmSync(join(dist, name), { recursive: true, force: true });
     }
   }
   rmSync(zipPath, { force: true });
-  copyEngine();
 }
 
 prepareDist();
 
-const ctx = await esbuild.context(esbuildOptions);
 const listCtx = await esbuild.context(listOptions);
+await listCtx.rebuild();
+const ctx = await esbuild.context(esbuildOptions);
 
 if (watchMode) {
-  await ctx.watch();
   await listCtx.watch();
-  watch(join(root, 'platforms', 'windows'), { recursive: true }, () => {
-    try {
-      copyEngine();
-    } catch (err) {
-      console.error(err);
-    }
-  });
+  await ctx.watch();
   watch(listTemplate, () => {
     try {
       writeListPage();
@@ -107,7 +100,6 @@ if (watchMode) {
   console.log('watching dist/windows');
 } else {
   await ctx.rebuild();
-  await listCtx.rebuild();
   await ctx.dispose();
   await listCtx.dispose();
 }

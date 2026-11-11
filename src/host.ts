@@ -1,13 +1,24 @@
+import engineSource from '../platforms/windows/engine.ahk';
+import hotstringsPage from 'kw:hotstrings.html';
+
 autowatch = 1;
 inlets = 1;
 outlets = 0;
+
+type PatcherObject = {
+  maxclass: string;
+  message: (...args: unknown[]) => void;
+};
 
 type HostJsThis = {
   patcher?: {
     filepath?: string;
     getnamed: (name: string) => { getvalueof: () => unknown };
+    applydeep: (fn: (obj: PatcherObject) => boolean) => void;
   };
 };
+
+const WRITE_CHUNK = 8192;
 
 const INITIATORS = [';', '/', 'CapsLock'];
 
@@ -193,36 +204,37 @@ function launchEngine() {
   max.launchbrowser(fileUrl(enginePath));
 }
 
-function projectRoot() {
-  const fp = hostThis().patcher?.filepath;
-  if (fp) {
-    return parentDir(String(fp));
-  }
-  const engine = resolveFromSearchPath('engine.ahk');
-  return engine ? parentDir(engine) : '';
-}
-
-function resolveFromSearchPath(name: string) {
-  const f = new File(name, 'read');
-  if (!f.isopen) {
-    return '';
-  }
-  const folder = String(f.foldername || '').replace(/[\\/]+$/, '');
-  f.close();
-  return folder ? joinPath(folder, name) : '';
-}
-
+// Frozen dependencies are not real files, so AutoHotkey and jweb get copies
+// written next to the .amxd.
 function ensureEnginePath() {
   if (enginePath) {
     return true;
   }
-  const root = projectRoot();
-  if (root) {
-    enginePath = joinPath(root, 'engine.ahk');
-    return true;
+  const fp = hostThis().patcher?.filepath;
+  if (!fp) {
+    post('host: save the device to disk first\n');
+    return false;
   }
-  post('host: cannot find engine.ahk\n');
-  return false;
+  const root = parentDir(String(fp));
+  const listPath = joinPath(root, 'hotstrings.html');
+  if (
+    !writeText(joinPath(root, 'engine.ahk'), engineSource) ||
+    !writeText(listPath, hotstringsPage)
+  ) {
+    return false;
+  }
+  enginePath = joinPath(root, 'engine.ahk');
+  showHotstringList(listPath);
+  return true;
+}
+
+function showHotstringList(path: string) {
+  hostThis().patcher?.applydeep(obj => {
+    if (obj.maxclass === 'jweb') {
+      obj.message('url', fileUrl(path));
+    }
+    return true;
+  });
 }
 
 function writeText(path: string, text: string) {
@@ -233,7 +245,10 @@ function writeText(path: string, text: string) {
   }
   f.eof = 0;
   f.position = 0;
-  f.writestring(`${String(text)}\n`);
+  const s = `${String(text)}\n`;
+  for (let i = 0; i < s.length; i += WRITE_CHUNK) {
+    f.writestring(s.substring(i, i + WRITE_CHUNK));
+  }
   f.close();
   return true;
 }
