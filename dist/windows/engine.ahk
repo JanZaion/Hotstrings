@@ -17,6 +17,11 @@ CMD_PATH := A_ScriptDir "\engine-cmd.txt"
 KEYS_PATH := A_ScriptDir "\bindings.json"
 HS_CHARS := "abcdefghijklmnopqrstuvwxyz0123456789=-"
 HS_INITIATORS := [";", "/", "CapsLock"]
+LIST_TITLE := "[Hotstrings]"
+LIST_SEARCH_X := 60
+LIST_SEARCH_Y := 31
+listHwnd := 0
+listActive := false
 
 hsBinds := Map()
 hsBuffer := ""
@@ -164,6 +169,51 @@ if bad.Length {
 }
 
 SetTimer WatchCmd, 150
+SetTimer WatchList, 100
+
+; The list's jweb only takes keyboard input after a click inside it, even when
+; its window is active, so focus the search box whenever the window activates.
+WatchList() {
+    global listHwnd, listActive
+    hwnd := ListWindow()
+    if !hwnd {
+        listHwnd := 0
+        listActive := false
+        return
+    }
+    if hwnd != listHwnd {
+        listHwnd := hwnd
+        listActive := false
+        try {
+            WinActivate(hwnd)
+        }
+    }
+    active := WinActive(hwnd) ? true : false
+    if active && !listActive {
+        FocusListSearch(hwnd)
+    }
+    listActive := active
+}
+
+ListWindow() {
+    global LIST_TITLE
+    for hwnd in WinGetList(LIST_TITLE) {
+        try {
+            if WinGetTitle(hwnd) = LIST_TITLE && InStr(WinGetProcessName(hwnd), "Ableton Live") {
+                return hwnd
+            }
+        }
+    }
+    return 0
+}
+
+FocusListSearch(hwnd) {
+    global LIST_SEARCH_X, LIST_SEARCH_Y
+    try {
+        scale := DllCall("User32\GetDpiForWindow", "Ptr", hwnd, "UInt") / 96
+        ControlClick("x" Round(LIST_SEARCH_X * scale) " y" Round(LIST_SEARCH_Y * scale), hwnd, , , , "NA")
+    }
+}
 
 WatchCmd() {
     global CMD_PATH, capturing
@@ -295,8 +345,9 @@ UpdateTip() {
 }
 
 LiveFocused(*) {
+    global LIST_TITLE
     try {
-        return InStr(WinGetProcessName("A"), "Ableton Live") > 0
+        return InStr(WinGetProcessName("A"), "Ableton Live") > 0 && WinGetTitle("A") != LIST_TITLE
     } catch {
         return false
     }
