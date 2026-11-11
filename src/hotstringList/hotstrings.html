@@ -200,7 +200,12 @@
         border-radius: 7px;
       }
 
-      .item:hover {
+      .item:not(.action) {
+        opacity: 0.6;
+      }
+
+      .item.action:hover,
+      .item.selected {
         background: rgba(var(--accent-rgb), 0.12);
       }
 
@@ -245,7 +250,8 @@
         color: var(--accent-text);
       }
 
-      .item:hover kbd {
+      .item.action:hover kbd,
+      .item.selected kbd {
         background: rgba(var(--accent-rgb), 0.32);
         color: var(--accent-text);
       }

@@ -1,12 +1,27 @@
 const LIST_PATCHER = 'Hotstrings';
 
-export function openList() {
+function findList() {
   for (let obj: Maxobj | null = patcher.firstobject; obj; obj = obj.nextobject as Maxobj | null) {
     const sub = obj.subpatcher();
     if (sub && sub.name === LIST_PATCHER) {
-      sub.message('front');
-      return;
+      return sub;
     }
   }
-  post(`openList: no [${LIST_PATCHER}] subpatcher\n`);
+  return null;
+}
+
+export function openList() {
+  const sub = findList();
+  if (!sub) {
+    post(`openList: no [${LIST_PATCHER}] subpatcher\n`);
+    return;
+  }
+  sub.message('front');
+}
+
+export function closeList() {
+  const sub = findList();
+  if (sub) {
+    sub.wind.visible = false;
+  }
 }

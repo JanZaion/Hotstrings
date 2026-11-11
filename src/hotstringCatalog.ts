@@ -4,6 +4,7 @@ import { FIXED_CHORDS, NATIVE_DEVICES } from './constants';
 export type ListItem = {
   key: string;
   desc: string;
+  bind?: string;
 };
 
 export type ListSection = {
@@ -154,7 +155,7 @@ function itemsFor(keys: readonly string[]) {
     if (!bind) {
       continue;
     }
-    items.push({ key, desc: itemDesc(key, bind.bind) });
+    items.push({ key, desc: itemDesc(key, bind.bind), bind: bind.bind });
   }
   return items;
 }
@@ -178,6 +179,7 @@ export function hotstringSections() {
     BINDINGS.hotkeys.map(bind => ({
       key: displayHotkey(bind.key),
       desc: HOTKEY_DESC[bind.key] ?? bind.bind,
+      bind: bind.keys || bind.bind === 'openList' ? undefined : bind.bind,
     }))
   );
   add('Chords', itemsFor(CHORD_KEYS));
@@ -198,7 +200,7 @@ export function hotstringSections() {
 
   const leftover = BINDINGS.hotstrings
     .filter(bind => !used.has(bind.key))
-    .map(bind => ({ key: bind.key, desc: itemDesc(bind.key, bind.bind) }));
+    .map(bind => ({ key: bind.key, desc: itemDesc(bind.key, bind.bind), bind: bind.bind }));
   add('Other', leftover);
   return sections;
 }

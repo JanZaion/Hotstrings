@@ -1511,16 +1511,29 @@ function vel() {
 
 // src/actions/list.ts
 var LIST_PATCHER = "Hotstrings";
-function openList() {
+function findList() {
   for (let obj = patcher.firstobject; obj; obj = obj.nextobject) {
     const sub = obj.subpatcher();
     if (sub && sub.name === LIST_PATCHER) {
-      sub.message("front");
-      return;
+      return sub;
     }
   }
-  post(`openList: no [${LIST_PATCHER}] subpatcher
+  return null;
+}
+function openList() {
+  const sub = findList();
+  if (!sub) {
+    post(`openList: no [${LIST_PATCHER}] subpatcher
 `);
+    return;
+  }
+  sub.message("front");
+}
+function closeList() {
+  const sub = findList();
+  if (sub) {
+    sub.wind.visible = false;
+  }
 }
 
 // src/actions/midiClip.ts
@@ -2115,6 +2128,7 @@ void loc;
 void clip;
 void playFrom;
 void openList;
+void closeList;
 void volup;
 void voldown;
 void headroom;
