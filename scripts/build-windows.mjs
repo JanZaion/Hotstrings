@@ -27,7 +27,7 @@ const esbuildOptions = {
   treeShaking: false,
   minifyIdentifiers: false,
   logLevel: 'info',
-  loader: { '.ahk': 'text', '.html': 'text' },
+  loader: { '.ahk': 'text', '.lua': 'text', '.html': 'text' },
   plugins: [
     {
       name: 'hotstring-list-page',

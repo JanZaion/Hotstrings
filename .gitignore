@@ -1,4 +1,4 @@
-# Runtime IPC between Max host and engine.ahk
+# Runtime IPC between Max host and the engine
 engine-cmd.txt
 current-preset.txt
 bindings.json

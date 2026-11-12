@@ -1,4 +1,6 @@
-import engineSource from '../platforms/windows/engine.ahk';
+import ahkEngineSource from './engine/engine.ahk';
+import luaEngineSource from './engine/engine.lua';
+import hammerspoonHook from './engine/hammerspoon-init.lua';
 import hotstringsPage from 'virtual:hotstrings.html';
 
 autowatch = 1;
@@ -21,6 +23,11 @@ type HostJsThis = {
 const WRITE_CHUNK = 8192;
 
 const INITIATORS = [';', '/', 'CapsLock'];
+
+const IS_MAC = max.os === 'macintosh';
+const ENGINE_NAME = IS_MAC ? 'engine.lua' : 'engine.ahk';
+const ENGINE_SOURCE = IS_MAC ? luaEngineSource : ahkEngineSource;
+const HAMMERSPOON_HOOK_MARKER = '-- KeyToMax hook';
 
 let enginePath = '';
 let shuttingDown = false;
@@ -201,10 +208,42 @@ function launchEngine() {
   if (!ensureEnginePath()) {
     return;
   }
+  if (IS_MAC) {
+    installHammerspoonHook();
+    max.launchbrowser(`hammerspoon://keytomax?path=${encodeURIComponent(posixPath(enginePath))}`);
+    return;
+  }
   max.launchbrowser(fileUrl(enginePath));
 }
 
-// Frozen dependencies are not real files, so AutoHotkey and jweb get copies
+// Hammerspoon only runs ~/.hammerspoon/init.lua, so the URL handler that loads
+// engine.lua has to live there. Max JS has no home directory lookup, so it is
+// derived from the device path.
+function installHammerspoonHook() {
+  const volume = /^[^/]*:(?=\/)/.exec(enginePath)?.[0] ?? '';
+  const home = /^\/Users\/[^/]+/.exec(posixPath(enginePath))?.[0];
+  if (home) {
+    const configDir = `${volume}${home}/.hammerspoon`;
+    const initPath = `${configDir}/init.lua`;
+    const existing = readText(initPath) ?? '';
+    const pathSaved = writeText(`${configDir}/keytomax-engine.txt`, posixPath(enginePath));
+    if (existing.includes(HAMMERSPOON_HOOK_MARKER)) {
+      return;
+    }
+    const prefix = existing === '' || existing.endsWith('\n') ? existing : `${existing}\n`;
+    if (pathSaved && writeText(initPath, `${prefix}${hammerspoonHook.trimEnd()}`)) {
+      post('host: added the KeyToMax hook to ~/.hammerspoon/init.lua\n');
+      post('host: if Hammerspoon was already running, click Reload Config in its menu\n');
+      return;
+    }
+  }
+  const fallback = joinPath(parentDir(enginePath), 'hammerspoon-init.lua');
+  writeText(fallback, hammerspoonHook);
+  post('host: could not update ~/.hammerspoon/init.lua (open Hammerspoon once first)\n');
+  post(`host: or append ${posixPath(fallback)} to it by hand and reload the config\n`);
+}
+
+// Frozen dependencies are not real files, so the engine and jweb get copies
 // written next to the .amxd.
 function ensureEnginePath() {
   if (enginePath) {
@@ -218,12 +257,12 @@ function ensureEnginePath() {
   const root = parentDir(String(fp));
   const listPath = joinPath(root, 'hotstrings.html');
   if (
-    !writeText(joinPath(root, 'engine.ahk'), engineSource) ||
+    !writeText(joinPath(root, ENGINE_NAME), ENGINE_SOURCE) ||
     !writeText(listPath, hotstringsPage)
   ) {
     return false;
   }
-  enginePath = joinPath(root, 'engine.ahk');
+  enginePath = joinPath(root, ENGINE_NAME);
   showHotstringList(listPath);
   return true;
 }
@@ -253,6 +292,23 @@ function writeText(path: string, text: string) {
   return true;
 }
 
+function readText(path: string) {
+  const f = new File(path, 'read');
+  if (!f.isopen) {
+    return;
+  }
+  let text = '';
+  while (f.position < f.eof) {
+    const chunk = f.readstring(WRITE_CHUNK);
+    if (!chunk) {
+      break;
+    }
+    text += chunk;
+  }
+  f.close();
+  return text;
+}
+
 function parentDir(path: string) {
   const s = String(path).replace(/[\\/]+$/, '');
   const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'));
@@ -266,12 +322,20 @@ function joinPath(a: string, b: string) {
   return `${String(a).replace(/[\\/]+$/, '')}/${b}`;
 }
 
+// Max on Mac reports paths as "Macintosh HD:/Users/...".
+function posixPath(path: string) {
+  return String(path).replace(/^[^/]*:(?=\/)/, '');
+}
+
 function nativePath(path: string) {
+  if (IS_MAC) {
+    return posixPath(path);
+  }
   return String(path).replace(/\//g, '\\');
 }
 
 function fileUrl(path: string) {
-  const posix = nativePath(path).replace(/\\/g, '/');
+  const posix = nativePath(path).replace(/\\/g, '/').replace(/^\/+/, '');
   return `file:///${posix.replace(/ /g, '%20')}`;
 }
 

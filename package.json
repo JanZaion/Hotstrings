@@ -7,6 +7,7 @@
   "description": "Hotstrings Max for Live device",
   "scripts": {
     "build": "node scripts/build-windows.mjs",
+    "build:mac": "pnpm build && node scripts/build-mac.mjs",
     "build:watch": "node scripts/build-windows.mjs --watch",
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/hotstringList",
     "lint": "eslint .",

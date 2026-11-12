@@ -2,4 +2,5 @@ dist
 node_modules
 *.amxd
 *.ahk
+*.lua
 pnpm-lock.yaml
