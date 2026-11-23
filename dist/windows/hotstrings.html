@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hotstrings</title>
+    <style>
+      :root {
+        --bg: rgb(28, 27, 26);
+        --text: rgb(242, 237, 230);
+        --subtle: rgb(153, 145, 135);
+        --faint: rgb(105, 97, 89);
+        --accent-rgb: 242, 143, 46;
+        --accent: rgb(var(--accent-rgb));
+        --accent-text: rgb(255, 194, 128);
+        --top: 62px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+        font-size: 13px;
+        user-select: none;
+        cursor: default;
+      }
+
+      header {
+        position: absolute;
+        inset: 0 0 auto;
+        z-index: 2;
+        height: var(--top);
+        background: var(--bg);
+      }
+
+      header::after {
+        content: '';
+        position: absolute;
+        inset: auto 0 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          rgba(var(--accent-rgb), 0.7),
+          rgba(var(--accent-rgb), 0.05)
+        );
+      }
+
+      .field {
+        position: absolute;
+        top: 14px;
+        left: 10px;
+        right: 18px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        padding-right: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .field.active {
+        border-color: rgba(var(--accent-rgb), 0.55);
+      }
+
+      .icon {
+        position: absolute;
+        left: 9px;
+        top: 8px;
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: var(--subtle);
+        stroke-width: 1.6;
+      }
+
+      .field.active .icon {
+        stroke: var(--accent);
+      }
+
+      .field input {
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        margin: 0 12px 0 33px;
+        padding: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        caret-color: var(--accent);
+      }
+
+      .field input::placeholder {
+        color: var(--faint);
+      }
+
+      .count {
+        color: var(--faint);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .clear {
+        display: none;
+        width: 16px;
+        height: 16px;
+        margin-left: 8px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .field.active .clear {
+        display: block;
+      }
+
+      .clear svg {
+        display: block;
+        width: 16px;
+        height: 16px;
+        stroke: rgba(242, 237, 230, 0.8);
+        stroke-width: 1.4;
+      }
+
+      .fade {
+        position: absolute;
+        top: var(--top);
+        left: 0;
+        right: 0;
+        z-index: 1;
+        height: 12px;
+        background: linear-gradient(var(--bg), rgba(28, 27, 26, 0));
+        pointer-events: none;
+        opacity: 0;
+      }
+
+      .fade.on {
+        opacity: 1;
+      }
+
+      main {
+        position: absolute;
+        inset: var(--top) 0 0;
+        overflow-y: scroll;
+        padding: 0 2px 10px 10px;
+      }
+
+      main::-webkit-scrollbar {
+        width: 16px;
+      }
+
+      main::-webkit-scrollbar-track {
+        margin: 4px 0;
+        background: transparent;
+      }
+
+      main::-webkit-scrollbar-thumb {
+        min-height: 28px;
+        border: 4px solid transparent;
+        border-radius: 8px;
+        background: rgba(var(--accent-rgb), 0.5) padding-box;
+      }
+
+      main::-webkit-scrollbar-thumb:active {
+        background-color: rgba(var(--accent-rgb), 0.9);
+      }
+
+      .group {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        height: 34px;
+        padding: 0 10px 6px;
+        color: var(--accent-text);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .group span {
+        color: var(--faint);
+        font-weight: 400;
+      }
+
+      .item {
+        display: flex;
+        align-items: center;
+        height: 30px;
+        margin: 1px 0;
+        padding: 0 10px;
+        border-radius: 7px;
+      }
+
+      .item:not(.action) {
+        opacity: 0.6;
+      }
+
+      .item.action:hover,
+      .item.selected {
+        background: rgba(var(--accent-rgb), 0.12);
+      }
+
+      .desc {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      mark {
+        margin: 0 -1px;
+        padding: 2px 1px;
+        border-radius: 3px;
+        background: rgba(var(--accent-rgb), 0.2);
+        color: var(--accent-text);
+      }
+
+      .keys {
+        display: flex;
+        gap: 4px;
+        margin-left: 16px;
+      }
+
+      kbd {
+        min-width: 20px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.07);
+        color: var(--subtle);
+        font-family: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 20px;
+        text-align: center;
+      }
+
+      .item.match kbd {
+        background: rgba(var(--accent-rgb), 0.18);
+        color: var(--accent-text);
+      }
+
+      .item.action:hover kbd,
+      .item.selected kbd {
+        background: rgba(var(--accent-rgb), 0.32);
+        color: var(--accent-text);
+      }
+
+      .empty {
+        padding-top: 30px;
+        text-align: center;
+        color: var(--subtle);
+      }
+
+      .empty small {
+        display: block;
+        margin-top: 6px;
+        color: var(--faint);
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <label class="field" id="field">
+        <svg class="icon" viewBox="0 0 16 16">
+          <circle cx="7" cy="7" r="5" />
+          <path d="M10.6 10.6 14 14" />
+        </svg>
+        <input id="search" placeholder="Search hotstrings" spellcheck="false" autocomplete="off" />
+        <span class="count" id="count"></span>
+        <button class="clear" id="clear" tabindex="-1" aria-label="Clear search">
+          <svg viewBox="0 0 16 16"><path d="M5 5l6 6M11 5l-6 6" /></svg>
+        </button>
+      </label>
+    </header>
+    <div class="fade" id="fade"></div>
+    <main id="list"></main>
+    <script>
+"use strict";
+(() => {
+  // src/constants.ts
+  var FIXED_CHORDS = {
+    major: [0, 4, 7],
+    minor: [0, 3, 7],
+    sus2: [0, 2, 7],
+    sus4: [0, 5, 7],
+    aug: [0, 4, 8],
+    dim: [0, 3, 6],
+    pow: [0, 7],
+    major7: [0, 4, 7, 11],
+    minor7: [0, 3, 7, 10],
+    dim7: [0, 3, 6, 9],
+    aug7: [0, 4, 8, 10],
+    major9: [0, 4, 7, 11, 14],
+    minor9: [0, 3, 7, 10, 14],
+    dim9: [0, 3, 6, 9, 14],
+    aug9: [0, 4, 8, 10, 14],
+    major11: [0, 4, 7, 11, 14, 17],
+    minor11: [0, 3, 7, 10, 14, 17],
+    major13: [0, 4, 7, 11, 14, 17, 21],
+    minor13: [0, 3, 7, 10, 14, 17, 21]
+  };
+  var MAJOR_FAMILY = {
+    3: FIXED_CHORDS.major,
+    4: FIXED_CHORDS.major7,
+    5: FIXED_CHORDS.major9,
+    6: FIXED_CHORDS.major11,
+    7: FIXED_CHORDS.major13
+  };
+  var NATIVE_DEVICES = {
+    ana: "Analog",
+    colis: "Collision",
+    dri: "Drift",
+    drumr: "Drum Rack",
+    elec: "Electric",
+    exti: "External Instrument",
+    imp: "Impulse",
+    irack: "Instrument Rack",
+    meld: "Meld",
+    op: "Operator",
+    samp: "Sampler",
+    simp: "Simpler",
+    ten: "Tension",
+    wav: "Wavetable",
+    amp: "Amp",
+    arack: "Audio Effect Rack",
+    af: "Auto Filter",
+    apan: "Auto Pan-Tremolo",
+    ash: "Auto Shift",
+    beat: "Beat Repeat",
+    cab: "Cabinet",
+    cheq: "Channel EQ",
+    ens: "Chorus-Ensemble",
+    comp: "Compressor",
+    corp: "Corpus",
+    del: "Delay",
+    drumb: "Drum Buss",
+    tube: "Dynamic Tube",
+    echo: "Echo",
+    eq8: "EQ Eight",
+    eq3: "EQ Three",
+    eros: "Erosion",
+    exta: "External Audio Effect",
+    fdel: "Filter Delay",
+    gate: "Gate",
+    glue: "Glue Compressor",
+    grain: "Grain Delay",
+    hyb: "Hybrid Reverb",
+    lim: "Limiter",
+    loop: "Looper",
+    mbd: "Multiband Dynamics",
+    od: "Overdrive",
+    ped: "Pedal",
+    phas: "Phaser-Flanger",
+    red: "Redux",
+    reso: "Resonators",
+    verb: "Reverb",
+    roar: "Roar",
+    sat: "Saturator",
+    shif: "Shifter",
+    sres: "Spectral Resonator",
+    stime: "Spectral Time",
+    spec: "Spectrum",
+    tun: "Tuner",
+    ut: "Utility",
+    vin: "Vinyl Distortion",
+    voc: "Vocoder",
+    arp: "Arpeggiator",
+    cc: "CC Control",
+    chordmidi: "Chord",
+    mrack: "MIDI Effect Rack",
+    nlen: "Note Length",
+    pit: "Pitch",
+    rand: "Random",
+    sca: "Scale",
+    vel: "Velocity"
+  };
+
+  // src/bindings.ts
+  var BINDINGS = {
+    hotkeys: [
+      { key: "`", bind: "cliploop", keys: "^j" },
+      { key: "^Space", bind: "playFrom" },
+      { key: "^!Left", bind: "chainLeft" },
+      { key: "^!Right", bind: "chainRight" },
+      { key: "Shift Shift", bind: "openList" }
+    ],
+    hotstrings: [
+      { key: "chord", bind: "chord" },
+      { key: "chord7", bind: "chord7" },
+      { key: "chord9", bind: "chord9" },
+      { key: "chord11", bind: "chord11" },
+      { key: "chord13", bind: "chord13" },
+      { key: "bass1", bind: "bass1" },
+      { key: "bass2", bind: "bass2" },
+      { key: "bass3", bind: "bass3" },
+      { key: "bass4", bind: "bass4" },
+      { key: "bass5", bind: "bass5" },
+      { key: "bass6", bind: "bass6" },
+      ...Object.keys(FIXED_CHORDS).map((key) => ({ key, bind: key })),
+      { key: "lead", bind: "lead" },
+      { key: "up", bind: "up" },
+      { key: "down", bind: "down" },
+      { key: "dearp", bind: "dearp" },
+      { key: "doub", bind: "doub" },
+      { key: "half", bind: "half" },
+      { key: "fit", bind: "fit" },
+      { key: "inv", bind: "inv" },
+      { key: "rev", bind: "rev" },
+      { key: "first", bind: "first" },
+      { key: "last", bind: "last" },
+      { key: "col", bind: "col" },
+      { key: "exp", bind: "exp" },
+      { key: "sol", bind: "sol" },
+      { key: "unsol", bind: "unsol" },
+      { key: "loc", bind: "loc", str: true },
+      { key: "clip", bind: "clip", int: true },
+      { key: "=", bind: "volup", int: true },
+      { key: "-", bind: "voldown", int: true },
+      { key: "headroom", bind: "headroom" },
+      { key: "heat", bind: "heat" },
+      { key: "low", bind: "low" },
+      { key: "high", bind: "high" },
+      { key: "notch", bind: "notch" },
+      { key: "band", bind: "band" },
+      { key: "eq", bind: "eq8" },
+      ...Object.keys(NATIVE_DEVICES).map((key) => ({ key, bind: key }))
+    ]
+  };
+
+  // src/hotstringCatalog.ts
+  var HOTKEY_DESC = {
+    "`": "Loop the open clip",
+    "^Space": "Play or stop from the start marker",
+    "^!Left": "Nudge the selected device left",
+    "^!Right": "Nudge the selected device right",
+    "Shift Shift": "Open this list"
+  };
+  var HOTSTRING_DESC = {
+    chord: "Diatonic triad from the clip scale",
+    chord7: "Diatonic 7th from the clip scale",
+    chord9: "Diatonic 9th from the clip scale",
+    chord11: "Diatonic 11th from the clip scale",
+    chord13: "Diatonic 13th from the clip scale",
+    bass1: "Bass on each beat",
+    bass2: "Eighth-note bass",
+    bass3: "Triplet bass",
+    bass4: "Offbeat 16th bass",
+    bass5: "Syncopated bass pattern",
+    bass6: "Second syncopated bass pattern",
+    lead: "Voice-lead selected chords",
+    up: "Arpeggiate selection up",
+    down: "Arpeggiate selection down",
+    dearp: "Collapse an arp into block chords",
+    doub: "Double selected note lengths",
+    half: "Halve selected note lengths",
+    fit: "Fit selected notes to the clip",
+    inv: "Invert selected notes",
+    rev: "Reverse selected notes",
+    first: "Select the first chain",
+    last: "Select the last chain",
+    col: "Collapse devices in the chain",
+    exp: "Expand devices in the chain",
+    sol: "Solo the selected effect",
+    unsol: "Unsolo chain effects",
+    loc: "Drop a locator, loc name to label it",
+    clip: "New MIDI clip, clip n for n bars",
+    "=": "Raise track volume, = n for track n",
+    "-": "Lower track volume, - n for track n",
+    headroom: "Drop volume on all regular tracks",
+    heat: "Raise volume on all regular tracks",
+    low: "EQ Eight lowpass",
+    high: "EQ Eight highpass",
+    notch: "EQ Eight notch",
+    band: "EQ Eight bandpass",
+    eq: "EQ Eight"
+  };
+  var INSTRUMENT_KEYS = [
+    "ana",
+    "colis",
+    "dri",
+    "drumr",
+    "elec",
+    "exti",
+    "imp",
+    "irack",
+    "meld",
+    "op",
+    "samp",
+    "simp",
+    "ten",
+    "wav"
+  ];
+  var MIDI_KEYS = ["arp", "cc", "chordmidi", "mrack", "nlen", "pit", "rand", "sca", "vel"];
+  var CHORD_KEYS = [
+    "chord",
+    "chord7",
+    "chord9",
+    "chord11",
+    "chord13",
+    ...Object.keys(FIXED_CHORDS),
+    "lead",
+    "up",
+    "down",
+    "dearp"
+  ];
+  var BASS_KEYS = ["bass1", "bass2", "bass3", "bass4", "bass5", "bass6"];
+  var CLIP_KEYS = ["doub", "half", "fit", "inv", "rev"];
+  var RACK_KEYS = ["first", "last", "col", "exp", "sol", "unsol"];
+  var MIXER_KEYS = ["=", "-", "headroom", "heat"];
+  var ARRANGE_KEYS = ["loc", "clip"];
+  var EQ_KEYS = ["eq", "low", "high", "notch", "band"];
+  function displayHotkey(key) {
+    return key.replaceAll("^", "Ctrl+").replaceAll("!", "Alt+").replaceAll("#", "Win+");
+  }
+  var CHORD_QUALITY = {
+    major: "Major",
+    minor: "Minor",
+    dim: "Diminished",
+    aug: "Augmented"
+  };
+  var FIXED_CHORD_DESC = {
+    sus2: "Suspended 2nd chord",
+    sus4: "Suspended 4th chord",
+    pow: "Power chord, root and fifth"
+  };
+  function fixedChordDesc(key) {
+    if (FIXED_CHORD_DESC[key]) {
+      return FIXED_CHORD_DESC[key];
+    }
+    const match = /^([a-z]+?)(\d*)$/.exec(key);
+    const quality = match ? CHORD_QUALITY[match[1]] : void 0;
+    if (!match || !quality) {
+      return void 0;
+    }
+    return match[2] ? `${quality} ${match[2]}th chord` : `${quality} triad`;
+  }
+  function itemDesc(key, bind) {
+    if (HOTSTRING_DESC[key]) {
+      return HOTSTRING_DESC[key];
+    }
+    if (key in FIXED_CHORDS) {
+      const desc = fixedChordDesc(key);
+      if (desc) {
+        return desc;
+      }
+    }
+    if (key in NATIVE_DEVICES) {
+      return NATIVE_DEVICES[key];
+    }
+    if (bind in NATIVE_DEVICES) {
+      return NATIVE_DEVICES[bind];
+    }
+    return bind;
+  }
+  function itemsFor(keys) {
+    const byKey = new Map(BINDINGS.hotstrings.map((bind) => [bind.key, bind]));
+    const items = [];
+    for (const key of keys) {
+      const bind = byKey.get(key);
+      if (!bind) {
+        continue;
+      }
+      items.push({ key, desc: itemDesc(key, bind.bind), bind: bind.bind });
+    }
+    return items;
+  }
+  function hotstringSections() {
+    const used = /* @__PURE__ */ new Set();
+    const sections2 = [];
+    function add(title, items) {
+      if (items.length === 0) {
+        return;
+      }
+      sections2.push({ title, items });
+      for (const item of items) {
+        used.add(item.key);
+      }
+    }
+    add(
+      "Hotkeys",
+      BINDINGS.hotkeys.map((bind) => ({
+        key: displayHotkey(bind.key),
+        desc: HOTKEY_DESC[bind.key] ?? bind.bind,
+        bind: bind.keys || bind.bind === "openList" ? void 0 : bind.bind
+      }))
+    );
+    add("Chords", itemsFor(CHORD_KEYS));
+    add("Bass", itemsFor(BASS_KEYS));
+    add("Clip", itemsFor(CLIP_KEYS));
+    add("Arrangement", itemsFor(ARRANGE_KEYS));
+    add("Mixer", itemsFor(MIXER_KEYS));
+    add("Rack", itemsFor(RACK_KEYS));
+    add("EQ", itemsFor(EQ_KEYS));
+    add("Instruments", itemsFor(INSTRUMENT_KEYS));
+    const midi = new Set(MIDI_KEYS);
+    const instruments = new Set(INSTRUMENT_KEYS);
+    add(
+      "Audio effects",
+      itemsFor(Object.keys(NATIVE_DEVICES).filter((key) => !instruments.has(key) && !midi.has(key)))
+    );
+    add("MIDI effects", itemsFor(MIDI_KEYS));
+    const leftover = BINDINGS.hotstrings.filter((bind) => !used.has(bind.key)).map((bind) => ({ key: bind.key, desc: itemDesc(bind.key, bind.bind), bind: bind.bind }));
+    add("Other", leftover);
+    return sections2;
+  }
+
+  // src/hotstringList/hotstrings.ts
+  var max = window.max;
+  var field = byId("field");
+  var input = byId("search");
+  var count = byId("count");
+  var clear = byId("clear");
+  var fade = byId("fade");
+  var list = byId("list");
+  var sections = hotstringSections().map((section) => {
+    const combos = section.title === "Hotkeys";
+    const entries = section.items.map((item) => ({
+      keys: combos ? item.key.split(/[+ ]/) : [item.key],
+      desc: item.desc,
+      bind: item.bind,
+      keyText: item.key.toLowerCase(),
+      search: `${item.key} ${item.desc}`.toLowerCase()
+    }));
+    return { title: section.title, search: section.title.toLowerCase(), entries };
+  });
+  var totalCount = sections.reduce((n, section) => n + section.entries.length, 0);
+  var actions = [];
+  var selected = -1;
+  function byId(id) {
+    const el2 = document.getElementById(id);
+    if (!el2) {
+      throw new Error(`missing #${id}`);
+    }
+    return el2;
+  }
+  function el(tag, className, ...children) {
+    const node = document.createElement(tag);
+    if (className) {
+      node.className = className;
+    }
+    node.append(...children);
+    return node;
+  }
+  function highlighted(text, q) {
+    const at = q === "" ? -1 : text.toLowerCase().indexOf(q);
+    if (at < 0) {
+      return [text];
+    }
+    return [
+      text.slice(0, at),
+      el("mark", "", text.slice(at, at + q.length)),
+      text.slice(at + q.length)
+    ];
+  }
+  function render() {
+    const raw = input.value;
+    const q = raw.trim().toLowerCase();
+    const rows = [];
+    actions = [];
+    let matches = 0;
+    for (const section of sections) {
+      const entries = q === "" || section.search.includes(q) ? section.entries : section.entries.filter((entry) => entry.search.includes(q));
+      if (entries.length === 0) {
+        continue;
+      }
+      matches += entries.length;
+      rows.push(el("div", "group", section.title, el("span", "", String(entries.length))));
+      for (const entry of entries) {
+        const keyMatch = q !== "" && entry.keyText.includes(q);
+        const row = el(
+          "div",
+          keyMatch ? "item match" : "item",
+          el("span", "desc", ...highlighted(entry.desc, q)),
+          el("span", "keys", ...entry.keys.map((key) => el("kbd", "", key)))
+        );
+        if (entry.bind) {
+          row.classList.add("action");
+          row.dataset.bind = entry.bind;
+          actions.push(row);
+        }
+        rows.push(row);
+      }
+    }
+    if (rows.length === 0) {
+      rows.push(
+        el(
+          "div",
+          "empty",
+          `No matches for "${raw.trim()}"`,
+          el("small", "", "Press Esc to close the list")
+        )
+      );
+    }
+    const active = raw !== "";
+    field.classList.toggle("active", active);
+    count.textContent = active ? `${matches} of ${totalCount}` : String(totalCount);
+    list.replaceChildren(...rows);
+    list.scrollTop = 0;
+    select(q !== "" && actions.length > 0 ? 0 : -1);
+    onScroll();
+  }
+  function select(index) {
+    actions[selected]?.classList.remove("selected");
+    selected = index;
+    const row = actions[selected];
+    if (!row) {
+      return;
+    }
+    row.classList.add("selected");
+    if (selected === 0) {
+      list.scrollTop = 0;
+    } else {
+      row.scrollIntoView({ block: "nearest" });
+    }
+  }
+  function move(step) {
+    if (actions.length === 0) {
+      return;
+    }
+    select(Math.min(actions.length - 1, Math.max(0, selected + step)));
+  }
+  function pageSize() {
+    const row = actions[0];
+    return row ? Math.max(1, Math.floor(list.clientHeight / (row.offsetHeight + 2)) - 1) : 1;
+  }
+  function close() {
+    setQuery("");
+    max?.outlet("closeList");
+  }
+  function fire(bind) {
+    max?.outlet(bind);
+    close();
+  }
+  function setQuery(next) {
+    input.value = next;
+    render();
+    input.focus();
+  }
+  function onScroll() {
+    fade.classList.toggle("on", list.scrollTop > 0);
+  }
+  input.addEventListener("input", render);
+  list.addEventListener("scroll", onScroll);
+  list.addEventListener("click", (event) => {
+    const row = event.target.closest(".item[data-bind]");
+    if (row?.dataset.bind) {
+      fire(row.dataset.bind);
+    }
+  });
+  clear.addEventListener("click", (event) => {
+    event.preventDefault();
+    setQuery("");
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      move(event.key === "ArrowDown" ? 1 : -1);
+    } else if (event.key === "PageDown" || event.key === "PageUp") {
+      event.preventDefault();
+      move(event.key === "PageDown" ? pageSize() : -pageSize());
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const bind = actions[selected]?.dataset.bind;
+      if (bind) {
+        fire(bind);
+      }
+    } else if (document.activeElement !== input) {
+      input.focus();
+    }
+  });
+  window.addEventListener("focus", () => input.focus());
+  render();
+  input.focus();
+})();
+</script>
+  </body>
+</html>
+
