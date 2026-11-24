@@ -3,7 +3,7 @@
 A Max for Live device that runs Ableton Live actions when you type short words. Press `;`, type
 `rev`, and the selected notes play backwards. Type `verb` and Reverb lands on the track.
 
-The ready-to-use device is on [Gumroad](https://nohasslebeats.com), and the docs are at
+The ready-to-use device is on [Gumroad](https://github.com/JanZaion/Hotstrings), and the docs are at
 [nohasslebeats.com/docs/hotstrings](https://nohasslebeats.com/docs/hotstrings/). This repo is for
 people who want to build the device from source or add their own hotstrings.
 
